@@ -7,7 +7,7 @@ security issue (credential leak, injection, XSS in the web interface, unsafe
 download behavior, etc.):
 
 - **Do not open a public issue** for exploitable vulnerabilities.
-- Report privately via [GitHub Security Advisories](https://github.com/ActiveInferenceInstitute/Journal-Utilities/security/advisories/new)
+- Report privately via [GitHub Security Advisories](https://github.com/ActiveInferenceInstitute/Journal_Utilities/security/advisories/new)
   ("Report a vulnerability"), or by contacting the maintainers through the
   Active Inference Institute.
 - Include a description, the affected version/commit, and reproduction steps.
