@@ -4,7 +4,7 @@ meta:
 repo:
   name: Journal-Utilities
   slug: journal-utilities
-  full_name: ActiveInferenceInstitute/Journal-Utilities
+  full_name: ActiveInferenceInstitute/Journal_Utilities
   description: Utilities and Documentation for creating contents for the Active Inference
     Journal
 institute:
@@ -22,7 +22,7 @@ ecosystem:
     relation: referenced-by
     note: Featured in Institute materials.
   links:
-    github: https://github.com/ActiveInferenceInstitute/Journal-Utilities
+    github: https://github.com/ActiveInferenceInstitute/Journal_Utilities
     website: https://www.activeinference.org
 artifacts:
 - path: README.md

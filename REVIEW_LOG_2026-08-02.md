@@ -1,6 +1,6 @@
 # Review Log — 2026-08-02 (mega-deep docs pass)
 
-**Repo:** Journal-Utilities (`ActiveInferenceInstitute/Journal-Utilities`)
+**Repo:** Journal-Utilities (`ActiveInferenceInstitute/Journal_Utilities`)
 **Branch:** `main` → `origin/main` (default branch)
 **HEAD at start:** `6a4185d` — "fix(journal-utils): harden pipeline, close 11 review majors, green gates"
 **Review type:** Documentation-focused mega-deep review + implementation pass.

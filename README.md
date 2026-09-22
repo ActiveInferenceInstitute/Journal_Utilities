@@ -7,7 +7,7 @@
 **A modular, config-driven pipeline for processing the [Active Inference Institute](https://www.youtube.com/@ActiveInference) video library.**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org)
-[![CI](https://github.com/ActiveInferenceInstitute/Journal-Utilities/actions/workflows/test.yml/badge.svg)](https://github.com/ActiveInferenceInstitute/Journal-Utilities/actions/workflows/test.yml)
+[![CI](https://github.com/ActiveInferenceInstitute/Journal_Utilities/actions/workflows/test.yml/badge.svg)](https://github.com/ActiveInferenceInstitute/Journal_Utilities/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-see%20repo-lightgrey)](LICENSE)
 
 *Download · Transcribe · Extract · Export · Browse · Chat*
@@ -99,7 +99,7 @@ Cohere AI entity extraction (people, concepts, theories, organizations) and rela
 
 ```bash
 # 1. Clone & install
-git clone https://github.com/ActiveInferenceInstitute/Journal-Utilities.git
+git clone https://github.com/ActiveInferenceInstitute/Journal_Utilities.git
 cd Journal-Utilities
 uv sync --all-extras
 
