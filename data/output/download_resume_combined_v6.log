@@ -1,9 +1,0 @@
-Traceback (most recent call last):
-  File "/Users/4d/Documents/GitHub/Journal-Utilities/scripts/download_channel.py", line 31, in <module>
-    from journal_utilities.channel import (
-  File "/Users/4d/Documents/GitHub/Journal-Utilities/src/journal_utilities/__init__.py", line 4, in <module>
-    from . import channel, downloader, playlist, renderer, transcriber, youtube  # noqa: F401
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/4d/Documents/GitHub/Journal-Utilities/src/journal_utilities/youtube.py", line 17, in <module>
-    from pyytdata import get_video_info
-ModuleNotFoundError: No module named 'pyytdata'

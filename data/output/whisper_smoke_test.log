@@ -1,27 +1,0 @@
-2026-02-16 04:45:12 [INFO] transcribe_missing: ============================================================
-2026-02-16 04:45:12 [INFO] transcribe_missing: Local Whisper Transcription (mlx-whisper)
-2026-02-16 04:45:12 [INFO] transcribe_missing: ============================================================
-2026-02-16 04:45:12 [INFO] transcribe_missing: Audio dir:      data/output/audio
-2026-02-16 04:45:12 [INFO] transcribe_missing: Transcript dir: data/output/transcripts
-2026-02-16 04:45:12 [INFO] transcribe_missing: Model:          mlx-community/whisper-large-v3-turbo
-2026-02-16 04:45:12 [INFO] transcribe_missing: Language:       en
-2026-02-16 04:45:12 [INFO] journal_utilities.transcriber: Found 120 audio files missing transcripts (out of 266 total audio files)
-2026-02-16 04:45:12 [INFO] journal_utilities.transcriber: Starting batch transcription of 2 files
-2026-02-16 04:45:12 [INFO] journal_utilities.transcriber: [1/2] Transcribing -j5JXt79H3w.mp3
-2026-02-16 04:45:12 [INFO] journal_utilities.transcriber: Transcribing -j5JXt79H3w with model mlx-community/whisper-large-v3-turbo
-2026-02-16 04:45:12 [DEBUG] urllib3.connectionpool: Starting new HTTPS connection (1): huggingface.co:443
-2026-02-16 04:45:13 [DEBUG] urllib3.connectionpool: https://huggingface.co:443 "GET /api/models/mlx-community/whisper-large-v3-turbo/revision/main HTTP/1.1" 200 911
-Fetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]Fetching 4 files: 100%|██████████| 4/4 [00:00<00:00, 93206.76it/s]
-2026-02-16 04:47:07 [INFO] journal_utilities.transcriber: Transcribed -j5JXt79H3w in 115.8s (37481 chars)
-2026-02-16 04:47:07 [INFO] journal_utilities.transcriber: [2/2] Transcribing 08iZGLAqI8E.mp3
-2026-02-16 04:47:07 [INFO] journal_utilities.transcriber: Transcribing 08iZGLAqI8E with model mlx-community/whisper-large-v3-turbo
-2026-02-16 04:48:54 [INFO] journal_utilities.transcriber: Transcribed 08iZGLAqI8E in 106.5s (36231 chars)
-2026-02-16 04:48:54 [INFO] journal_utilities.transcriber: Batch transcription complete: 2 success, 0 skipped, 0 failed (222.3s total)
-2026-02-16 04:48:54 [INFO] transcribe_missing: ============================================================
-2026-02-16 04:48:54 [INFO] transcribe_missing: TRANSCRIPTION COMPLETE
-2026-02-16 04:48:54 [INFO] transcribe_missing:   Total processed:  2
-2026-02-16 04:48:54 [INFO] transcribe_missing:   Successful:       2
-2026-02-16 04:48:54 [INFO] transcribe_missing:   Skipped:          0
-2026-02-16 04:48:54 [INFO] transcribe_missing:   Failed:           0
-2026-02-16 04:48:54 [INFO] transcribe_missing:   Total time:       222.3s
-2026-02-16 04:48:54 [INFO] transcribe_missing: ============================================================
