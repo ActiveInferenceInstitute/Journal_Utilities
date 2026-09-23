@@ -7,6 +7,7 @@ venv
 .env
 history.txt
 
+log.txt
 .coverage
 
 # Audio — large media, never commit (audio lives on the audio branch only)
