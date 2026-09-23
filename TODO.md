@@ -304,3 +304,47 @@ root `AGENTS.md` mock-policy reconciled; `docs/REFACTOR_READINESS.md` marked a h
 - This pass (2026-08-02) was docs-only + config fixes; the follow-up pass landed the
   subtitle-translation feature (local Ollama + hosted OpenRouter engines, see
   `docs/translation.md`). `insights_findings.md` remains untracked working notes.
+
+---
+
+## I4 — site-builder language coverage fix (2026-09-23, fleet agent ju-site-langs)
+
+**Finding (verified):** `site/builder.py` read only the lowercase `translations/`
+subdirectory with `tr_dir.glob("*.srt")` and used the raw penultimate dot
+segment as the language key. Against the canonical journal repo (560 of 573
+items keep translations in legacy capital-T `Translations/`, per the 2026-09-23
+handoff), that made almost every item report `languages: []` in the site
+manifest. The sibling local checkout has all 178 translation-bearing items in
+lowercase `translations/`, so the before/after item count there is flat; the
+spellings fix is proven by unit tests (both spellings, `.SRT` extension case,
+both-spelling dedupe on case-sensitive CI).
+
+**Fixed this pass:**
+- `builder.py`: translation discovery is now case-insensitive for the directory
+  (`translations/` or `Translations/`, lowercase preferred, files deduped by
+  name) and the `.srt` extension; language keys strip trailing parenthetical
+  annotations (`.chi(translated)` → `chi`, `.en(ca)` → `en`) and reject
+  non-language segments (real junk existed: two transcript-dump SRTs in
+  BookStream_001 exposed as fake "languages" like
+  `08 ~  Governing Continuous Transformation_transcript`).
+- `translate_subtitles_openrouter.py`: the resume guard (`existing_translation`)
+  checks both `translations/` spellings, so a run never re-pays OpenRouter for
+  output already produced in either spelling.
+- Tests: `tests/journal_utilities/test_site_builder.py` (lang-key variants,
+  capital dir, `.SRT` extension, both-spelling dedupe — skipped on
+  case-insensitive filesystems, runs in CI — and manifest `languages` from a
+  capital-`Translations/` tree) and
+  `tests/journal_utilities/test_translate_subtitles_openrouter.py` (guard unit
+  test + end-to-end `main()` skip proof with no API call).
+
+**Real-data measurement** (local sibling checkout
+`instituteos/repos/ActiveInferenceJournal`, 573 items with metadata.json):
+items with ≥1 language 178 → 178 (all lowercase dirs locally); distinct lang
+keys 26 → 22, dropping 2 garbage keys and un-annotating 12 `(translated)`-tag
+keys. On the canonical repo the same change lifts language-bearing items from
+13 to all items holding either spelling (~144+ per the handoff's
+~2,880 capital-T SRTs), pending the M2 migration to a single normalized tree.
+
+**Follow-up:** J2/M2 still owns the `Translations/` → `translations/` git mv +
+BCP-47 normalization (`chi` → `zh-Hans`, `dut` → `nl`, …); this fix is the
+reader-side bridge until that migration lands.

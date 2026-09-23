@@ -267,6 +267,19 @@ def translation_filename(source_srt: Path, lang: str) -> str:
     return f"{base}.{lang}.srt"
 
 
+def existing_translation(item_dir: Path, dest_name: str) -> Path | None:
+    """An already-produced translation file, in either translations/ spelling.
+
+    Checks lowercase ``translations/`` first, then legacy ``Translations/``, so
+    the driver never re-pays for output that exists under either spelling.
+    """
+    for dir_name in ("translations", "Translations"):
+        cand = item_dir / dir_name / dest_name
+        if cand.exists():
+            return cand
+    return None
+
+
 def iter_caption_files(journal: Path, series: str) -> list[Path]:
     base = journal / "data" / "video" / "activeinferenceinstitute"
     if series:
@@ -380,8 +393,8 @@ def main() -> int:
         item_dir = srt.parent.parent
         trans_dir = item_dir / "translations"
         for lang in langs:
-            dest = trans_dir / translation_filename(srt, lang)
-            if dest.exists() and not args.force:
+            dest_name = translation_filename(srt, lang)
+            if existing_translation(item_dir, dest_name) and not args.force:
                 skipped += 1
                 continue
             src_text = srt.read_text(encoding="utf-8-sig", errors="replace")
@@ -394,7 +407,7 @@ def main() -> int:
                 falls += 1
                 continue
             trans_dir.mkdir(parents=True, exist_ok=True)
-            dest.write_text(translated, encoding="utf-8")
+            (trans_dir / dest_name).write_text(translated, encoding="utf-8")
             produced += 1
             falls += failed
             if failed:

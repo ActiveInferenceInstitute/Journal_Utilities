@@ -52,6 +52,49 @@ def parse_srt(text: str) -> list[dict[str, Any]]:
     return cues
 
 
+_LANG_ANNOTATION_RE = re.compile(r"\([^()]*\)$")
+_LANG_TAG_RE = re.compile(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*\Z")
+
+
+def _translation_dirs(item_dir: Path) -> list[Path]:
+    """Translation directories under an item, in any case spelling.
+
+    The journal has both `translations/` and legacy `Translations/` item
+    subdirectories; lowercase is preferred when both exist.
+    """
+    if not item_dir.is_dir():
+        return []
+    dirs = [d for d in item_dir.iterdir() if d.is_dir() and d.name.casefold() == "translations"]
+    return sorted(dirs, key=lambda d: (d.name != "translations", str(d)))
+
+
+def _iter_translation_files(item_dir: Path) -> list[Path]:
+    """Collect `.srt` files from every spelling of the item's translations dir.
+
+    Matches any `.srt` extension spelling, deduplicates by file name across
+    directory spellings (lowercase dir wins), and returns a name-sorted list.
+    """
+    chosen: dict[str, Path] = {}
+    for d in _translation_dirs(item_dir):
+        for f in d.iterdir():
+            if f.is_file() and f.suffix.casefold() == ".srt":
+                chosen.setdefault(f.name, f)
+    return [chosen[name] for name in sorted(chosen)]
+
+
+def translation_lang_key(srt_file: Path) -> str | None:
+    """Derive the language key for a translation SRT file name.
+
+    Strips a trailing parenthetical annotation (`.chi(translated)` -> `chi`)
+    and returns ``None`` when the final dot segment is not a plausible language
+    tag (e.g. transcript dumps named without a language).
+    """
+    tag = srt_file.name[: -len(srt_file.suffix)].rsplit(".", 1)[-1].strip()
+    tag = _LANG_ANNOTATION_RE.sub("", tag).strip()
+    if not tag or not _LANG_TAG_RE.fullmatch(tag):
+        return None
+    return tag
+
 def build_item_payload(item_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
     """Extract and structure full interactive data for a single journal item."""
     series = meta.get("series", "")
@@ -117,23 +160,19 @@ def build_item_payload(item_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
     if txt_path.exists():
         payload["raw_text"] = txt_path.read_text(encoding="utf-8", errors="replace")
 
-    # 3. Process translations
-    tr_dir = item_dir / "translations"
-    if tr_dir.exists():
-        for srt_file in sorted(tr_dir.glob("*.srt")):
-            parts_name = srt_file.name.split(".")
-            if len(parts_name) >= 2:
-                lang = parts_name[-2]
-                try:
-                    cues = parse_srt(srt_file.read_text(encoding="utf-8", errors="replace"))
-                    if cues:
-                        if lang not in payload["translations"]:
-                            payload["translations"][lang] = []
-                        payload["translations"][lang].append(
-                            {"file": srt_file.name, "cues": cues}
-                        )
-                except Exception as e:
-                    logger.warning("Failed parsing translation %s: %s", srt_file, e)
+    # 3. Process translations (both `translations/` and `Translations/` spellings)
+    for srt_file in _iter_translation_files(item_dir):
+        lang = translation_lang_key(srt_file)
+        if lang is None:
+            continue
+        try:
+            cues = parse_srt(srt_file.read_text(encoding="utf-8", errors="replace"))
+            if cues:
+                payload["translations"].setdefault(lang, []).append(
+                    {"file": srt_file.name, "cues": cues}
+                )
+        except Exception as e:
+            logger.warning("Failed parsing translation %s: %s", srt_file, e)
 
     return payload
 

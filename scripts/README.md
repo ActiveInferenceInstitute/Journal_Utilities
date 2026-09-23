@@ -281,12 +281,19 @@ Uses OpenRouter API (requires `OPENROUTER_API_KEY` in `.env` or environment):
 python scripts/translate_subtitles_openrouter.py --journal ../ActiveInferenceJournal --series "Livestream"
 ```
 
+Resumable and idempotent: languages whose output already exists — under either
+`translations/` spelling — are skipped without an API call unless `--force`.
+
 
 ## `build_pages_site.py`
 
 Compile the sibling `ActiveInferenceJournal` checkout into a static GitHub Pages
 bundle (HTML pages + index) under the journal's own output directory. Pass
 `--help` for the journal-path and output flags; read-only with respect to this repo.
+
+The bundle's per-item language lists are derived from every `translations/`
+spelling (`translations/` and legacy `Translations/`), any `.srt` extension
+case, and annotated tags like `.chi(translated)` (key: `chi`).
 
 ## `derive_captions_from_json.py`
 

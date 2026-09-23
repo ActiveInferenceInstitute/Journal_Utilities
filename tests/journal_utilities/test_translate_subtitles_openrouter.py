@@ -67,3 +67,42 @@ def test_load_api_key_requires_env_or_repo_env(monkeypatch, tmp_path):
         raise AssertionError("should have exited")
     except SystemExit as e:
         assert "OPENROUTER_API_KEY" in str(e)
+
+
+def test_existing_translation_checks_both_spellings(tmp_path):
+    from translate_subtitles_openrouter import existing_translation
+
+    item = tmp_path / "Item_001"
+    legacy = item / "Translations"
+    legacy.mkdir(parents=True)
+    (legacy / "V.es.srt").write_text("existing", encoding="utf-8")
+
+    found = existing_translation(item, "V.es.srt")
+    assert found is not None and found.exists() and found.name == "V.es.srt"
+    assert existing_translation(item, "V.de.srt") is None
+
+
+def test_main_skips_existing_translation_in_legacy_spelling(tmp_path, monkeypatch, capsys):
+    from translate_subtitles_openrouter import main
+
+    journal = tmp_path / "journal"
+    item = journal / "data/video/activeinferenceinstitute/Series/Item_001"
+    (item / "captions").mkdir(parents=True)
+    (item / "captions" / "V.en.srt").write_text(SRT, encoding="utf-8")
+    (item / "Translations").mkdir()
+    (item / "Translations" / "V.es.srt").write_text("existing", encoding="utf-8")
+
+    monkeypatch.setattr("sys.argv", ["prog", "--journal", str(journal), "--lang", "es"])
+    monkeypatch.setattr("translate_subtitles_openrouter.load_api_key", lambda: "k")
+
+    def boom(*args, **kwargs):
+        raise AssertionError("translate_srt must not run for already-existing output")
+
+    monkeypatch.setattr("translate_subtitles_openrouter.translate_srt", boom)
+
+    assert main() == 0
+    out = capsys.readouterr().out
+    assert "skipped 1 existing" in out
+    # Nothing new was written and the legacy file is untouched.
+    assert len(list(item.rglob("*.srt"))) == 2
+    assert (item / "Translations" / "V.es.srt").read_text(encoding="utf-8") == "existing"
