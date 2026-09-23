@@ -4,6 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Requires the transcribe extra; skip cleanly when it is not installed.
+pytest.importorskip("whisperx")
+
 from journal_utilities.transcribe.transcribe import TranscriptionService
 
 

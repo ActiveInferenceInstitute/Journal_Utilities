@@ -8,6 +8,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+# Requires the rag extra; skip cleanly when it is not installed.
+pytest.importorskip("surrealdb")
+
 from journal_utilities.data.database import (
     DatabaseClient,
     DatabaseConfig,
