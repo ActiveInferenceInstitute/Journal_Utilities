@@ -2,29 +2,42 @@
 # Live YouTube metadata batch update: sequential, quota-aware, with post-settle verify.
 # Bash 3.2-safe (macOS default): no mapfile, no associative arrays.
 #
+# All paths are repo-relative. The runner is sync_youtube_metadata.py, which is
+# dry-run by default and enforces Rule 1 (no write without a Data API-fetched
+# snippet + pre-update backup + quota accounting).
+#
 # Env/flags:
-#   QUEUE      path to queue JSON (default: day-1 queue)
-#   RUNNER     wrapper that invokes sync_youtube_metadata.py
-#   MAX_VIDEOS max videos per run (default 200)
-#   SETTLE     seconds to wait after each update before --verify re-fetch
-#              (YouTube propagation delay; default 18, 0 disables)
-#   DRY_RUN    if non-empty, skip all API calls (syntax/arg smoke mode)
+#   QUEUE        path to queue JSON (default: data/input/youtube_update_queue.json)
+#   RUNNER       command prefix invoking sync_youtube_metadata.py (word-split;
+#                default passes --apply, --verify and the quota budget)
+#   MAX_VIDEOS   max videos per run (default 150 — quota-safe: each video costs
+#                1 read + 50 update + 1 verify = 52 units, 150*52 = 7,800 of the
+#                10,000/day budget; the old 200 default (10,400) exceeded it)
+#   QUOTA_BUDGET units this run may spend, forwarded to --quota-budget
+#   SETTLE       seconds to wait after each update before --verify re-fetch
+#                (YouTube propagation delay; default 18, 0 disables)
+#   DRY_RUN      if non-empty, skip all API calls (syntax/arg smoke mode)
 set -u
 
-QUEUE="${QUEUE:-/Users/4d/HermesWorkspace/youtube_update_queue.json}"
-RUNNER="${RUNNER:-/Users/4d/HermesWorkspace/run_youtube_sync.sh}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+QUEUE="${QUEUE:-$REPO_ROOT/data/input/youtube_update_queue.json}"
 LOG="${LOG:-/tmp/live_batch_run.log}"
 PROG="${PROG:-/tmp/live_progress.json}"
-MAX_VIDEOS="${MAX_VIDEOS:-200}"
+MAX_VIDEOS="${MAX_VIDEOS:-150}"
+QUOTA_BUDGET="${QUOTA_BUDGET:-10000}"
 SETTLE="${SETTLE:-18}"
 DRY_RUN="${DRY_RUN:-}"
+RUNNER="${RUNNER:-uv run --project $REPO_ROOT python $REPO_ROOT/scripts/sync_youtube_metadata.py --apply --verify --quota-budget=$QUOTA_BUDGET}"
 
 # Portable (bash 3.2) ID load: python prints newline-separated IDs, collected
 # with a while-read loop instead of bash-4-only mapfile. YouTube IDs contain
 # only [A-Za-z0-9_-], so whitespace-safe word iteration below is sound.
 IDS=$(python3 -c "
-import json
-d=json.load(open('$QUEUE'))
+import json, sys
+try:
+    d=json.load(open('$QUEUE'))
+except (OSError, ValueError) as exc:
+    sys.exit(f'QUEUE ERROR: {exc}')
 print('\n'.join(e['id'] for e in d[:$MAX_VIDEOS]))
 ")
 if [ -z "$IDS" ]; then
@@ -47,7 +60,7 @@ for vid in $IDS; do
     continue
   fi
 
-  out=$("$RUNNER" --video-id="$vid" --verify 2>&1)
+  out=$($RUNNER --video-id="$vid" 2>&1)
   echo "$out" >> "$LOG"
   if printf '%s' "$out" | grep -q 'quotaExceeded'; then
     echo "FATAL_QUOTA_EXCEEDED $vid" >> "$LOG"; failed=$((failed+1))
@@ -64,7 +77,7 @@ for vid in $IDS; do
     verified=$((verified+1))
     echo "RESULT OK VERIFIED $vid" >> "$LOG"
     succeeded=$((succeeded+1))
-  elif printf '%s' "$out" | grep -q 'Completed: 1 video'; then
+  elif printf '%s' "$out" | grep -q 'Completed:'; then
     if [ "$SETTLE" -gt 0 ]; then sleep "$SETTLE"; fi
     echo "RESULT OK INCONCLUSIVE $vid" >> "$LOG"
     succeeded=$((succeeded+1))
