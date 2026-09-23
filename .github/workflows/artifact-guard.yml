@@ -1,0 +1,30 @@
+name: Artifact guard
+
+# E3: generated pipeline output and OS noise must never be tracked in git.
+# Untrack with `git rm --cached` + .gitignore (no history rewrites).
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  no-tracked-artifacts:
+    name: No tracked *.log / *.part / *.ytdl / .DS_Store
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Fail if generated artifacts are tracked
+        run: |
+          violations="$(git ls-files -- '*.log' '*.part' '*.ytdl' '.DS_Store' '*.DS_Store')"
+          if [ -n "$violations" ]; then
+            echo "::error::Generated/OS artifacts are tracked in git. Untrack them with 'git rm --cached' and rely on .gitignore (never rewrite history):"
+            printf '%s\n' "$violations"
+            exit 1
+          fi
+          echo "OK: no tracked *.log, *.part, *.ytdl, or .DS_Store files."
