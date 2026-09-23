@@ -18,7 +18,9 @@ CHAPTERS_MARKER_START = "--- TIMESTAMPS & CHAPTERS ---"
 CHAPTERS_MARKER_END = "--- RESOURCES & TRANSCRIPT ---"
 INSTITUTE_MARKER_START = "--- ACTIVE INFERENCE INSTITUTE ---"
 
-DEFAULT_GITHUB_TRANSCRIPTS_BASE = "https://github.com/ActiveInferenceInstitute/ActiveInferenceJournal/blob/main/transcripts"
+JOURNAL_GITHUB_TREE_BASE = (
+    "https://github.com/ActiveInferenceInstitute/ActiveInferenceJournal/tree/main"
+)
 
 STANDARD_INSTITUTE_LINKBLOCK = """Active Inference Institute information:
 Website: https://www.activeinference.institute/
@@ -47,10 +49,10 @@ _YT_REPLACEMENTS = {
     "\u000b": " ",  # vertical tab
     "\u000c": " ",  # form feed
     "\u00a0": " ",  # nbsp
-    "\u200b": "",   # zero-width space
+    "\u200b": "",  # zero-width space
     "\u200c": "",
     "\u200d": "",
-    "\ufeff": "",   # BOM
+    "\ufeff": "",  # BOM
 }
 
 
@@ -62,7 +64,7 @@ def sanitize_for_youtube(text: str) -> str:
     invisible characters that trigger invalidDescription.
     """
     # Replace literal angle brackets that cause invalidDescription
-    text = text.replace('<', '[').replace('>', ']')
+    text = text.replace("<", "[").replace(">", "]")
     out: list[str] = []
     for ch in text:
         if ch in ("\n", "\t", "\r"):
@@ -81,9 +83,11 @@ def sanitize_for_youtube(text: str) -> str:
     cleaned = "\n".join(line.rstrip() for line in cleaned.split("\n"))
     return cleaned.strip()
 
+
 @dataclass
 class ChapterEntry:
     """Represents a single video chapter / timestamp entry."""
+
     start: float  # seconds
     title: str
 
@@ -92,12 +96,46 @@ class ChapterEntry:
         return f"{ts} {self.title.strip()}"
 
 
-def build_github_transcript_url(
+def build_journal_item_url(item_path: str) -> str:
+    """Build the GitHub tree URL for a journal item directory (``INDEX.json`` items[].path).
+
+    This is the per-item source tree (metadata, transcripts, captions) — never a
+    guessed ``blob/main/transcripts/<video_id>.md`` path, which does not exist.
+    """
+    return f"{JOURNAL_GITHUB_TREE_BASE}/{item_path}"
+
+
+def build_video_item_index(index_items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Map every video ID in journal ``INDEX.json`` items[].parts to its item record."""
+    index: dict[str, dict[str, Any]] = {}
+    for item in index_items:
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        for video_id in item.get("parts") or []:
+            if isinstance(video_id, str) and video_id:
+                index[video_id] = item
+    return index
+
+
+def resolve_video_journal_url(
     video_id: str,
-    base_url: str = DEFAULT_GITHUB_TRANSCRIPTS_BASE,
-) -> str:
-    """Build the canonical GitHub URL for a video's transcript markdown."""
-    return f"{base_url}/{video_id}.md"
+    video_item_index: dict[str, dict[str, Any]],
+    *,
+    has_transcript: bool | None = None,
+) -> str | None:
+    """Resolve a video ID to its journal item tree URL, or ``None`` if unmapped.
+
+    ``has_transcript`` overrides the item's INDEX flag when given; the link is
+    only emitted for items the INDEX marks as having a transcript.
+    """
+    item = video_item_index.get(video_id)
+    if item is None or not item.get("path"):
+        return None
+    if has_transcript is None:
+        has_transcript = bool(item.get("has_transcript"))
+    if not has_transcript:
+        return None
+    return build_journal_item_url(str(item["path"]))
 
 
 def format_chapters_block(chapters: list[ChapterEntry | dict[str, Any]]) -> str:
@@ -110,7 +148,8 @@ def format_chapters_block(chapters: list[ChapterEntry | dict[str, Any]]) -> str:
         if isinstance(c, ChapterEntry):
             parsed.append(c)
         elif isinstance(c, dict):
-            start = float(c.get("start", c.get("start_time", 0.0)))
+            raw_start = c.get("start", c.get("start_time"))
+            start = float(raw_start) if raw_start is not None else 0.0
             title = str(c.get("title", "")).strip()
             if title:
                 parsed.append(ChapterEntry(start=start, title=title))
@@ -177,8 +216,8 @@ def split_base_description(description: str) -> tuple[str, str]:
     for pat in link_header_patterns:
         match = re.search(pat, description)
         if match:
-            paper_info = _strip_timestamp_runs(description[:match.start()]).strip()
-            link_block = description[match.start():].strip()
+            paper_info = _strip_timestamp_runs(description[: match.start()]).strip()
+            link_block = description[match.start() :].strip()
             return paper_info, link_block
 
     return _strip_timestamp_runs(description).strip(), ""
@@ -218,9 +257,8 @@ def assemble_video_description(
 
     # 3. Resources & Transcript Links
     res_lines: list[str] = []
-    transcript_url = github_transcript_url or (build_github_transcript_url(video_id) if video_id else None)
-    if transcript_url:
-        res_lines.append(f"📄 Full Transcript & Summary on GitHub:\n{transcript_url}")
+    if github_transcript_url:
+        res_lines.append(f"📄 Full Transcript on GitHub:\n{github_transcript_url}")
     if slides_url:
         res_lines.append(f"📊 Presentation Slides:\n{slides_url}")
     if coda_url:
