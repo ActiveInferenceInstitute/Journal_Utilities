@@ -29,5 +29,8 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check src/ tests/ scripts/
 
+      - name: Format check (ruff format — replaces black)
+        run: uv run ruff format --check src/ tests/ scripts/
+
       - name: Type check (mypy)
         run: uv run mypy src
