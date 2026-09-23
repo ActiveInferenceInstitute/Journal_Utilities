@@ -11,6 +11,7 @@ Generates clean, idempotent descriptions suitable for updating via YouTube Data 
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -138,7 +139,7 @@ def resolve_video_journal_url(
     return build_journal_item_url(str(item["path"]))
 
 
-def format_chapters_block(chapters: list[ChapterEntry | dict[str, Any]]) -> str:
+def format_chapters_block(chapters: Sequence[ChapterEntry | dict[str, Any]]) -> str:
     """Format a list of chapters into YouTube-compliant description lines."""
     if not chapters:
         return ""
@@ -226,8 +227,7 @@ def split_base_description(description: str) -> tuple[str, str]:
 def assemble_video_description(
     *,
     base_description: str = "",
-    chapters: list[ChapterEntry | dict[str, Any]] | None = None,
-    video_id: str = "",
+    chapters: Sequence[ChapterEntry | dict[str, Any]] | None = None,
     github_transcript_url: str | None = None,
     slides_url: str | None = None,
     coda_url: str | None = None,

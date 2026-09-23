@@ -240,12 +240,17 @@ def sync_videos(ctx: SyncContext, targets: list[dict]) -> int:
         )
 
         if not ctx.apply:
-            print(f"\n=================== DRY RUN PREVIEW: {vid} ===================")
+            print(f"=================== DRY RUN PREVIEW: {vid} ===================")
             print(f"Title: {snippet.title}")
             print(f"Tags ({len(snippet.tags)}): {', '.join(snippet.tags)}")
-            print("Description:")
+            print("--- CURRENT (live) DESCRIPTION ---")
+            print(raw_desc)
+            print("--- PROPOSED DESCRIPTION ---")
             print(snippet.description)
-            print("==============================================================\n")
+            print(
+                f"(on --apply, the live description is backed up to {ctx.backup_dir / vid}/<timestamp>.json)"
+            )
+            print("==============================================================")
             continue
 
         # --------------------------------------------------------- 3. PUSH
