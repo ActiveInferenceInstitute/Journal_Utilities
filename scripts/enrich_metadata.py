@@ -23,6 +23,7 @@ import logging
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
@@ -38,6 +39,7 @@ from journal_utilities.data.enrichment import (  # noqa: E402
     prefer_url,
 )
 from journal_utilities.youtube.categorizer import categorize_name  # noqa: E402
+from journal_utilities.youtube.chapter_generator import validate_chapters  # noqa: E402
 from journal_utilities.youtube.youtube import extract_youtube_id  # noqa: E402
 
 logger = logging.getLogger("enrich_metadata")
@@ -111,14 +113,18 @@ def find_secondary_item(vid: str, canonical: str, items: dict) -> str | None:
     return None
 
 
-def process_split_files(split_dir: Path, items: dict, manifest: dict, report: dict) -> dict[str, dict]:
+def process_split_files(
+    split_dir: Path, items: dict, manifest: dict, report: dict
+) -> dict[str, dict]:
     """Parse *_split.txt files -> {item_rel: {enrichment, fill_parts}}; mark Other/ duplicates."""
     pending: dict[str, dict] = {}
     for split_path in sorted(split_dir.glob("*_split.txt")):
         result = parse_split_file(split_path.read_text(encoding="utf-8"))
         target = f"{result.category}/{result.series}"
         if target not in items:
-            report["errors"].append(f"{split_path.name}: target item {target!r} not found in journal")
+            report["errors"].append(
+                f"{split_path.name}: target item {target!r} not found in journal"
+            )
             continue
         enrichment = {
             "sessions": result.sessions,
@@ -129,8 +135,12 @@ def process_split_files(split_dir: Path, items: dict, manifest: dict, report: di
         fill = [manifest_part(manifest[result.video_id])] if result.video_id in manifest else None
         pending[target] = {"enrichment": enrichment, "fill_parts": fill}
         report["split_files"].append(
-            {"file": split_path.name, "item": target, "sessions": len(result.sessions),
-             "parts_filled": bool(fill)}
+            {
+                "file": split_path.name,
+                "item": target,
+                "sessions": len(result.sessions),
+                "parts_filled": bool(fill),
+            }
         )
 
         duplicate = find_secondary_item(result.video_id, target, items)
@@ -143,7 +153,9 @@ def process_split_files(split_dir: Path, items: dict, manifest: dict, report: di
     return pending
 
 
-def match_coda_rows(rows: list[dict], vid_index: dict, items: dict, report: dict) -> dict[str, list]:
+def match_coda_rows(
+    rows: list[dict], vid_index: dict, items: dict, report: dict
+) -> dict[str, list]:
     """Return item_rel -> [(video_id_or_None, mapped_fields), ...]."""
     matched: dict[str, list] = defaultdict(list)
     claimed_fallback: set[str] = set()
@@ -217,33 +229,80 @@ def _fmt_start(seconds: float) -> str:
     return f"{total // 3600}:{total % 3600 // 60:02d}:{total % 60:02d}"
 
 
-def load_chapters(path: Path) -> dict[str, list]:
+def load_chapters(path: Path) -> dict[str, Any]:
+    """Load a chapters cache: video_id -> payload (list of chapters, or a
+    provenance dict ``{source, model, generated_at, chapters: [...]}``).
+
+    Trust decisions are made per-part in chapter_sessions, where the
+    part's video duration is available for the coverage rule.
+    """
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def chapter_sessions(meta: dict, chapters: dict[str, list]) -> list[dict]:
-    """Seed sessions[] from YouTube chapter lists, sequential across parts.
+def _usable_part_chapters(payload: Any, duration: float | None) -> list | None:  # noqa: ANN401 - cache payload is list-or-dict by design
+    """Return seedable chapters for one video part, or None to skip.
 
-    Only fires when at least one part has >=2 chapters (a single chapter is
-    not a session structure). Speaker attribution is left to humans — the
+    Trust model:
+      - ``{"source": "youtube", "chapters": [...]}`` or a plain list (the
+        video_chapters.json shape — only fetch_chapters.py writes it, from
+        YouTube's own chapter data) → trusted; needs >=2 chapters.
+      - Anything else with provenance (``source`` != youtube, i.e. the LLM
+        cache) must pass validate_chapters with the part's duration — lists
+        without a duration can never prove coverage, so they are rejected.
+    """
+    source = ""
+    entries: list
+    if isinstance(payload, dict) and "chapters" in payload:
+        source = str(payload.get("source") or "")
+        entries = payload["chapters"]
+    elif isinstance(payload, list):
+        entries = payload
+        sources = {c.get("source", "") for c in entries if isinstance(c, dict)}
+        if sources == {"youtube"}:
+            source = "youtube"
+    else:
+        return None
+
+    if source == "youtube":
+        return entries if len(entries) >= 2 else None
+
+    if duration is None:
+        return None
+    if not validate_chapters(entries, duration_seconds=duration).passed:
+        return None
+    return entries
+
+
+def chapter_sessions(meta: dict, chapters: dict[str, Any]) -> list[dict]:
+    """Seed sessions[] from trusted chapter lists, sequential across parts.
+
+    Per part, chapters are seedable when their source is ``youtube`` or they
+    pass ``validate_chapters`` (journal part duration required for the
+    coverage rule). Unprovenanced lists — e.g. the legacy LLM cache — are
+    never seeded. Only fires when a part has >=2 chapters (a single chapter
+    is not a session structure). Speaker attribution is left to humans — the
     journal owns sessions after seeding.
     """
     sessions: list[dict] = []
     for part in meta.get("parts", []):
         vid = part.get("video_id", "")
-        part_chapters = chapters.get(vid) or []
-        if len(part_chapters) < 2:
+        if not vid:
             continue
-        for chapter in part_chapters:
+        usable = _usable_part_chapters(chapters.get(vid), part.get("duration"))
+        if not usable:
+            continue
+        for chapter in usable:
             index = len(sessions) + 1
-            sessions.append({
-                "index": index,
-                "session_name": f"{vid}_sess{index:02d}",
-                "start": _fmt_start(chapter["start"]),
-                "title": chapter["title"],
-            })
+            sessions.append(
+                {
+                    "index": index,
+                    "session_name": f"{vid}_sess{index:02d}",
+                    "start": _fmt_start(chapter["start"]),
+                    "title": chapter["title"],
+                }
+            )
     return sessions
 
 
@@ -277,10 +336,20 @@ CURATED_SESSIONS = {
         _sess("PVeyvHSAwmk", 6, "3:31:10", ["Avel Guénin-Carlut"]),
         _sess("PVeyvHSAwmk", 7, "4:00:40", ["Pablo Fernandez-Maquieira"]),
         _sess("PVeyvHSAwmk", 8, "4:30:00", ["Mahault Albarracin"]),
-        _sess("PVeyvHSAwmk", 9, "5:02:30",
-              ["Bert de Vries", "Rafael Kaufmann", "Anna Lembke", "Curt Jaimungal",
-               "Karl J Friston", "Guillaume Dumas"],
-              title="Roundtable"),
+        _sess(
+            "PVeyvHSAwmk",
+            9,
+            "5:02:30",
+            [
+                "Bert de Vries",
+                "Rafael Kaufmann",
+                "Anna Lembke",
+                "Curt Jaimungal",
+                "Karl J Friston",
+                "Guillaume Dumas",
+            ],
+            title="Roundtable",
+        ),
     ],
 }
 
@@ -303,10 +372,14 @@ def _collect_name_diffs(rec: dict, enrichment: dict, rel: str, report: dict) -> 
         if (rel, field, tuple(db_names)) in RESOLVED_NAME_DIFFS:
             continue
         if db_names and coda_names and not set(db_names) <= set(coda_names):
-            report["name_diffs"].append({"item": rel, "field": field, "db": db_names, "coda": coda_names})
+            report["name_diffs"].append(
+                {"item": rel, "field": field, "db": db_names, "coda": coda_names}
+            )
 
 
-def write_private_registry(journal: Path, db_records: dict, vid_index: dict, apply: bool, report: dict) -> None:
+def write_private_registry(
+    journal: Path, db_records: dict, vid_index: dict, apply: bool, report: dict
+) -> None:
     """Document private/unlisted channel videos absent from the journal."""
     private = [
         {"video_id": vid, "title": rec.get("title", "")}
@@ -316,11 +389,18 @@ def write_private_registry(journal: Path, db_records: dict, vid_index: dict, app
     if not private:
         return
     path = journal / SRC_PREFIX / "private_videos.json"
-    payload = json.dumps(
-        {"description": "Private/unlisted videos known to the Institute but absent from "
-                        "this public corpus (from the legacy session database).",
-         "videos": private},
-        indent=2, ensure_ascii=False) + "\n"
+    payload = (
+        json.dumps(
+            {
+                "description": "Private/unlisted videos known to the Institute but absent from "
+                "this public corpus (from the legacy session database).",
+                "videos": private,
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n"
+    )
     changed = not path.exists() or path.read_text(encoding="utf-8") != payload
     if changed and apply:
         path.write_text(payload, encoding="utf-8")
@@ -354,13 +434,19 @@ def combine_rows(entries: list, meta: dict, report: dict, rel: str) -> tuple[dic
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--journal", type=Path, default=REPO.parent / "ActiveInferenceJournal")
     parser.add_argument("--snapshot-only", action="store_true", help="skip the Coda API fetch")
-    parser.add_argument("--coda-cache", type=Path, default=REPO / "data/input/livestream_fulldata_full.json")
+    parser.add_argument(
+        "--coda-cache", type=Path, default=REPO / "data/input/livestream_fulldata_full.json"
+    )
     parser.add_argument("--split-dir", type=Path, default=REPO / "data/input")
     parser.add_argument("--manifest", type=Path, default=REPO / "data/output/channel_videos.json")
-    parser.add_argument("--db-export", type=Path, default=REPO / "data/input/session_db_export.json")
+    parser.add_argument(
+        "--db-export", type=Path, default=REPO / "data/input/session_db_export.json"
+    )
     parser.add_argument("--chapters", type=Path, default=REPO / "data/input/video_chapters.json")
     parser.add_argument("--apply", action="store_true", help="write changes (default: dry run)")
     parser.add_argument("--report", type=Path, help="write full JSON report to this path")
@@ -370,12 +456,24 @@ def main() -> int:
     load_dotenv(REPO / ".env")
 
     report: dict = {
-        "source": "", "rows_total": 0, "matched_by_id": 0,
-        "matched_by_fallback": [], "unmatched": [], "split_files": [],
-        "duplicates_marked": [], "per_part_attachments": [], "conflicts": [],
-        "items_enriched": 0, "items_unchanged": 0, "errors": [],
-        "db_export": "absent", "db_slides": [], "name_diffs": [],
-        "private_registry": None, "curated_parts": [], "chapter_seeded": [],
+        "source": "",
+        "rows_total": 0,
+        "matched_by_id": 0,
+        "matched_by_fallback": [],
+        "unmatched": [],
+        "split_files": [],
+        "duplicates_marked": [],
+        "per_part_attachments": [],
+        "conflicts": [],
+        "items_enriched": 0,
+        "items_unchanged": 0,
+        "errors": [],
+        "db_export": "absent",
+        "db_slides": [],
+        "name_diffs": [],
+        "private_registry": None,
+        "curated_parts": [],
+        "chapter_seeded": [],
         "chapters_cache": "absent",
         "per_series": defaultdict(lambda: {"enriched": 0, "total": 0}),
     }
@@ -410,9 +508,13 @@ def main() -> int:
     for vid, rec in db_records.items():
         if vid in vid_index:
             db_by_item[vid_index[vid]].append(rec)
-    report["db_export"] = f"{args.db_export.name} ({len(db_records)} sessions)" if db_records else "absent"
+    report["db_export"] = (
+        f"{args.db_export.name} ({len(db_records)} sessions)" if db_records else "absent"
+    )
     chapters = load_chapters(args.chapters)
-    report["chapters_cache"] = f"{sum(1 for c in chapters.values() if c)} videos with chapters" if chapters else "absent"
+    report["chapters_cache"] = (
+        f"{sum(1 for c in chapters.values() if c)} videos with chapters" if chapters else "absent"
+    )
 
     for rel, entry in items.items():
         series = rel.split("/")[0]
@@ -428,7 +530,9 @@ def main() -> int:
             row_fields, part_updates = combine_rows(matched[rel], entry["meta"], report, rel)
             row_fields.pop("enriched_from", None)
             enrichment.update(row_fields)
-            enrichment["enriched_from"] = list(dict.fromkeys(enrichment["enriched_from"] + ["coda"]))
+            enrichment["enriched_from"] = list(
+                dict.fromkeys(enrichment["enriched_from"] + ["coda"])
+            )
         if rel in pending:
             work = pending[rel]
             for key, value in work["enrichment"].items():
@@ -470,30 +574,46 @@ def main() -> int:
             applied = False
             if multi_part:
                 vid = rec["session_name"]
-                existing = next((p.get("slides_url", "") for p in entry["meta"]["parts"]
-                                 if p.get("video_id") == vid), "")
+                existing = next(
+                    (
+                        p.get("slides_url", "")
+                        for p in entry["meta"]["parts"]
+                        if p.get("video_id") == vid
+                    ),
+                    "",
+                )
                 if prefer_url(existing, db_slides) != existing:
                     part_updates.setdefault(vid, {})["slides_url"] = db_slides
-                    report["db_slides"].append({"item": rel, "part": vid, "replaced": existing or None})
+                    report["db_slides"].append(
+                        {"item": rel, "part": vid, "replaced": existing or None}
+                    )
                     applied = True
             else:
                 current = enrichment.get("slides_url") or entry["meta"].get("slides_url") or ""
                 if prefer_url(current, db_slides) != current:
                     enrichment["slides_url"] = db_slides
-                    report["db_slides"].append({"item": rel, "part": None, "replaced": current or None})
+                    report["db_slides"].append(
+                        {"item": rel, "part": None, "replaced": current or None}
+                    )
                     applied = True
             already_db = db_slides in (
                 [enrichment.get("slides_url"), entry["meta"].get("slides_url")]
                 + [p.get("slides_url") for p in entry["meta"].get("parts", [])]
             )
             if applied or already_db:
-                enrichment["enriched_from"] = list(dict.fromkeys(enrichment.get("enriched_from", []) + ["db"]))
+                enrichment["enriched_from"] = list(
+                    dict.fromkeys(enrichment.get("enriched_from", []) + ["db"])
+                )
 
         # Canonical self-link into this repo's current layout (Coda's are pre-v2, stale).
         enrichment["github"] = github_link(rel)
-        enrichment["enriched_from"] = list(dict.fromkeys(enrichment.get("enriched_from", []) + ["generated"]))
+        enrichment["enriched_from"] = list(
+            dict.fromkeys(enrichment.get("enriched_from", []) + ["generated"])
+        )
 
-        new_meta, changed = merge_enrichment(entry["meta"], enrichment, part_updates, fill_parts, replace_parts)
+        new_meta, changed = merge_enrichment(
+            entry["meta"], enrichment, part_updates, fill_parts, replace_parts
+        )
         if changed:
             report["items_enriched"] += 1
             report["per_series"][series]["enriched"] += 1
@@ -509,7 +629,9 @@ def main() -> int:
     report["per_series"] = dict(sorted(report["per_series"].items()))
     _print_summary(report, dry_run=not args.apply)
     if args.report:
-        args.report.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        args.report.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
         logger.info("full report -> %s", args.report)
     return 0 if not report["errors"] else 1
 
@@ -522,8 +644,10 @@ def _print_summary(report: dict, dry_run: bool) -> None:
     print(f"  matched by id:      {report['matched_by_id']}")
     print(f"  matched by fallback:{len(report['matched_by_fallback']):>4}")
     print(f"  unmatched:          {len(report['unmatched'])}")
-    print(f"split files:          {len(report['split_files'])} "
-          f"({sum(s['sessions'] for s in report['split_files'])} sessions)")
+    print(
+        f"split files:          {len(report['split_files'])} "
+        f"({sum(s['sessions'] for s in report['split_files'])} sessions)"
+    )
     print(f"duplicates marked:    {report['duplicates_marked']}")
     print(f"curated part fixes:   {[c['item'].split('/')[-1] for c in report['curated_parts']]}")
     print(f"chapters cache:       {report['chapters_cache']}")
@@ -533,12 +657,16 @@ def _print_summary(report: dict, dry_run: bool) -> None:
     print(f"per-part attachments: {len(report['per_part_attachments'])}")
     print(f"conflicts:            {len(report['conflicts'])}")
     print(f"db export:            {report['db_export']}")
-    print(f"db slides applied:    {len(report['db_slides'])} "
-          f"({sum(1 for s in report['db_slides'] if s['replaced'])} replaced junk)")
+    print(
+        f"db slides applied:    {len(report['db_slides'])} "
+        f"({sum(1 for s in report['db_slides'] if s['replaced'])} replaced junk)"
+    )
     print(f"name diffs (review):  {len(report['name_diffs'])}")
     if report["private_registry"]:
-        print(f"private registry:     {report['private_registry']['videos']} videos "
-              f"(written: {report['private_registry']['written']})")
+        print(
+            f"private registry:     {report['private_registry']['videos']} videos "
+            f"(written: {report['private_registry']['written']})"
+        )
     if report["errors"]:
         print("ERRORS:")
         for err in report["errors"]:
