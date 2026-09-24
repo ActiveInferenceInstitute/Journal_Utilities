@@ -14,7 +14,10 @@ Design:
 - Google libraries are imported lazily so the module is importable (and
   testable with fakes) without google-api-python-client present.
 - OAuth (scope ``youtube.force-ssl``) is required for writes; an API key alone
-  only builds a read-only service.
+  only builds a read-only service. OAuth token owner (DAF, 2026-09):
+  **admin@activeinference.institute** — the org account
+  ``ActiveInferenceInstitute``. The ``ActInfInstitute`` account is
+  personal/admin: do NOT authorize writes with it.
 - :class:`QuotaLedger` implements the per-call quota accounting mandated by the
   handoff (videos.update=50, captions.insert=400, playlistItems.insert=50,
   list=1) against the 10,000 units/day default budget.
