@@ -47,7 +47,7 @@ def test_starts_are_monotonic_on_real_transcript() -> None:
     assert len(segments) > 10
     starts = [float(seg["start"]) for seg in segments]
     assert starts[0] == 0.0
-    assert all(b > a for a, b in zip(starts, starts[1:]))
+    assert all(b > a for a, b in zip(starts, starts[1:], strict=False))
 
 
 def test_total_duration_matches_words_over_wpm(tmp_path: Path) -> None:

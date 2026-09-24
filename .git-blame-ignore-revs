@@ -1,0 +1,12 @@
+# Formatting-only commits excluded from `git blame` (git config:
+# blame.ignoreRevsFile = .git-blame-ignore-revs).
+#
+# PLACEHOLDER — the ruff-format-only commit has NOT landed yet. Once the
+# black -> ruff format switch is committed (~63 files reformatted, no code
+# changes), append its full 40-char SHA below with a one-line note, e.g.:
+#
+#   # style: switch formatter from black to ruff format (formatting-only, no code changes)
+#   <full-40-char-commit-sha>
+#
+# Then enable it repo-wide:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs

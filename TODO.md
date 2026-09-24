@@ -293,6 +293,19 @@ root `AGENTS.md` mock-policy reconciled; `docs/REFACTOR_READINESS.md` marked a h
       `uv run pytest tests/ -q` whenever a pass touches tests. Deferred: this
       round changed docs only; no test surface moved.
 
+## E2 M0 CI-gates pass — 2026-09-23 (feat/m0-ci-gates)
+
+- [ ] **E2 remainder — formatting-only commit + black removal (sibling-owned files)** — the
+  CI surface `.github/workflows/test.yml` now gates `ruff format --check src/ tests/ scripts/`
+  (required check: `test`) and the new `.pre-commit-config.yaml` runs ruff (check + fix),
+  ruff format, and mypy on src; `.git-blame-ignore-revs` holds a placeholder for the
+  formatting commit. This reverses the M2 decision that dropped the ruff-format gate
+  (the black convention is retired in favor of ruff format). Blocking on ju-repo-diet:
+  land the formatting-only commit (`uv run ruff format src/ tests/ scripts/`, ~63 files,
+  style-only, SHA goes into `.git-blame-ignore-revs`) and remove `[tool.black]` + the
+  `black` dev dependency from `pyproject.toml` and the `make format` target from `Makefile`;
+  update the black rows in `CONTRIBUTING.md` / `CLAUDE.md` in the same PR.
+
 ## Notes for the next reviewer
 
 - Test/corpus counts are live snapshots — run `uv run pytest tests/ -q`; do not hardcode totals
