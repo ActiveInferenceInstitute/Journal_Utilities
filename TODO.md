@@ -304,3 +304,8 @@ root `AGENTS.md` mock-policy reconciled; `docs/REFACTOR_READINESS.md` marked a h
 - This pass (2026-08-02) was docs-only + config fixes; the follow-up pass landed the
   subtitle-translation feature (local Ollama + hosted OpenRouter engines, see
   `docs/translation.md`). `insights_findings.md` remains untracked working notes.
+
+## M0 wave — 2026-09-23
+
+- [ ] Run `YOUTUBE_API_KEY=… uv run python scripts/audit_live_descriptions.py` (read-only) and review the
+  dead-link report before any YouTube write-back (M5 queue); entry from the M0 youtube-write branch.
