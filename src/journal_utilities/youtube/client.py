@@ -181,7 +181,7 @@ class YouTubeClient:
 
         # google_auth_oauthlib ships no stubs and is an optional runtime dep
         # (write mode only); import-not-found is suppressed for that reason.
-        from google_auth_oauthlib.flow import InstalledAppFlow  # type: ignore[import-not-found]
+        from google_auth_oauthlib.flow import InstalledAppFlow
 
         creds: Credentials | None = None
         if self._token_path and Path(self._token_path).is_file():
