@@ -176,9 +176,11 @@ class YouTubeClient:
         return build("youtube", "v3", credentials=credentials, static_discovery=False)
 
     def _load_oauth_credentials(self) -> Any:  # noqa: ANN401
-        from google.auth.transport.requests import Request
-        from google.oauth2.credentials import Credentials
-        from google_auth_oauthlib.flow import InstalledAppFlow
+        from google.auth.transport.requests import Request  # type: ignore[import-not-found]
+        from google.oauth2.credentials import Credentials  # type: ignore[import-not-found]
+        # google_auth_oauthlib ships no stubs and is an optional runtime dep
+        # (write mode only); import-not-found is suppressed for that reason.
+        from google_auth_oauthlib.flow import InstalledAppFlow  # type: ignore[import-not-found]
 
         creds: Credentials | None = None
         if self._token_path and Path(self._token_path).is_file():
