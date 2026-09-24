@@ -18,6 +18,14 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from journal_utilities.site.pages_site import (
+    BASE_URL,
+    plan_item_pages,
+    plan_sitemap_urls,
+    write_item_pages,
+)
+from journal_utilities.site.sitemap import render_robots, render_sitemap
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,6 +102,7 @@ def translation_lang_key(srt_file: Path) -> str | None:
     if not tag or not _LANG_TAG_RE.fullmatch(tag):
         return None
     return tag
+
 
 def build_item_payload(item_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
     """Extract and structure full interactive data for a single journal item."""
@@ -181,8 +190,14 @@ def build_site(
     journal_dir: Path,
     output_dir: Path,
     clean: bool = True,
+    static_pages: bool = False,
 ) -> dict[str, Any]:
-    """Generate the complete static site bundle for GitHub Pages."""
+    """Generate the complete static site bundle for GitHub Pages.
+
+    With ``static_pages=True`` (M4), also bakes one crawlable
+    ``/item/<series>/<item>/index.html`` per item plus ``sitemap.xml`` and
+    ``robots.txt`` (spec: ActiveInferenceJournal ``docs/m4-site-spec.md``).
+    """
     index_path = journal_dir / "INDEX.json"
     if not index_path.exists():
         raise FileNotFoundError(f"INDEX.json not found at {index_path}")
@@ -197,8 +212,9 @@ def build_site(
     data_dir = output_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest_items = []
+    manifest_items: list[dict[str, Any]] = []
     processed_count = 0
+    processed_entries: list[tuple[str, dict[str, Any]]] = []
 
     for it in items:
         path_str = it.get("path", "")
@@ -247,7 +263,23 @@ def build_site(
             }
         )
         processed_count += 1
+        processed_entries.append((path_str, meta))
 
+    # M4 static per-item pages + sitemap + robots (opt-in).
+    if static_pages:
+        plans = plan_item_pages(journal_dir, processed_entries)
+        pages_written = write_item_pages(plans, output_dir)
+        if pages_written != processed_count:
+            raise RuntimeError(
+                f"sitemap/page mismatch: {pages_written} pages vs {processed_count} items"
+            )
+        urls = plan_sitemap_urls(plans)
+        if len(urls) - 1 != processed_count:
+            raise RuntimeError(
+                f"sitemap URL count {len(urls) - 1} != items processed {processed_count}"
+            )
+        (output_dir / "sitemap.xml").write_text(render_sitemap(urls), encoding="utf-8")
+        (output_dir / "robots.txt").write_text(render_robots(BASE_URL), encoding="utf-8")
     # Write manifest.json
     manifest = {
         "version": "1.0",
@@ -271,4 +303,5 @@ def build_site(
     return {
         "items_processed": processed_count,
         "output_dir": str(output_dir),
+        "pages_written": pages_written if static_pages else 0,
     }

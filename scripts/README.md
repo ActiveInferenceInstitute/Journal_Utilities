@@ -291,9 +291,18 @@ Compile the sibling `ActiveInferenceJournal` checkout into a static GitHub Pages
 bundle (HTML pages + index) under the journal's own output directory. Pass
 `--help` for the journal-path and output flags; read-only with respect to this repo.
 
+Modes (M4):
+
+- default — dry run: builds into a temp dir and reports counts, writes nothing.
+- `--apply` — write the bundle to `--output` (SPA + per-item pages + `sitemap.xml`
+  + `robots.txt`, per the ActiveInferenceJournal `docs/m4-site-spec.md`).
+- `--check` — CI freshness gate: build to a temp dir and compare against an
+  existing `--output`; exit 1 with a per-file drift report on any difference.
+
 The bundle's per-item language lists are derived from every `translations/`
 spelling (`translations/` and legacy `Translations/`), any `.srt` extension
 case, and annotated tags like `.chi(translated)` (key: `chi`).
+
 
 ## `derive_captions_from_json.py`
 
