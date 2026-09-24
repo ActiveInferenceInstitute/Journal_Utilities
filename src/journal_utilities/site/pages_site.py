@@ -128,7 +128,9 @@ def _clips(part: dict[str, Any]) -> list[dict[str, Any]]:
             "@type": "Clip",
             "name": str(ch.get("title") or f"Chapter {i + 1}"),
             "startOffsetTime": start,
-            "url": f"{watch}?t={start}",
+            # parts[].url already carries ?v=<id>; the timestamp is an
+            # additional query param, so join with & when a query exists.
+            "url": f"{watch}{'&' if '?' in watch else '?'}t={start}",
         }
         if end is not None:
             clip["endOffsetTime"] = int(end)
@@ -190,8 +192,11 @@ def _dataset_node(meta: dict[str, Any], canonical: str) -> dict[str, Any]:
 
 
 def _ld_json_script(node: dict[str, Any]) -> str:
-    payload = json.dumps(node, ensure_ascii=False)
-    return f'<script type="application/ld+json">{html.escape(payload, quote=False)}</script>'
+    # <script> content is raw text: HTML entities are NOT decoded there, so
+    # html.escape would corrupt JSON values (e.g. "&t=1" -> "&amp;t=1" in the
+    # parsed JSON-LD). Only "</" needs guarding to prevent </script> breakout.
+    payload = json.dumps(node, ensure_ascii=False).replace("</", "<\\/")
+    return f'<script type="application/ld+json">{payload}</script>'
 
 
 def _item_languages(item_dir: Path) -> list[str]:

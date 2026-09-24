@@ -156,7 +156,8 @@ def test_item_page_jsonld_parses_with_video_object_and_dataset(tmp_path: Path) -
     assert len(clips) == 2
     assert clips[0]["@type"] == "Clip"
     assert clips[0]["startOffsetTime"] == 0
-    assert clips[0]["url"].endswith("?t=0")
+    assert clips[0]["url"] == "https://www.youtube.com/watch?v=vid0001&t=0"
+    assert clips[1]["url"].endswith("&t=120")
     assert clips[1]["endOffsetTime"] == 300  # falls back to part duration
     assert clips[0]["name"] == "Welcome"
 
@@ -184,7 +185,7 @@ def test_item_page_head_tags_and_transcript(tmp_path: Path) -> None:
     assert "Date: 2021-06-21" in html_doc
     assert "Transcript of: First Talk" in html_doc
     # Chapters as jump links.
-    assert 'href="https://www.youtube.com/watch?v=vid0001?t=120"' in html_doc
+    assert 'href="https://www.youtube.com/watch?v=vid0001&amp;t=120"' in html_doc
     assert ">Welcome (0:00)</a>" in html_doc and ">Introduction (2:00)</a>" in html_doc
     # YouTube-nocookie embed.
     assert "youtube-nocookie.com/embed/vid0001" in html_doc
