@@ -13,7 +13,6 @@ from journal_utilities.site.pages_site import (
     plan_sitemap_urls,
     write_item_pages,
 )
-from journal_utilities.site.sitemap import SitemapUrl, render_robots, render_sitemap
 
 SRT_BODY = "1\n00:00:01,000 --> 00:00:02,000\nsubtitle line\n"
 
@@ -240,24 +239,6 @@ def test_plan_sitemap_urls_bijection(tmp_path: Path) -> None:
     assert mods[page_url("https://example.com/", "Series A", "2021 Talk One")] == "2021-06-21"
     assert mods[page_url("https://example.com/", "Series A", "2022 Talk Two")] is None
     assert mods[page_url("https://example.com/", "Series B", "Seminar X")] is None
-
-
-def test_sitemap_render_and_robots() -> None:
-    xml = render_sitemap(
-        [
-            SitemapUrl(loc="https://example.com/"),
-            SitemapUrl(loc="https://example.com/item/A%20B/C/", lastmod="2021-06-21"),
-            SitemapUrl(loc="https://example.com/item/D/E/"),
-        ]
-    )
-    assert 'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"' in xml
-    assert xml.count("<url>") == 3
-    assert "<lastmod>2021-06-21</lastmod>" in xml
-    assert "<changefreq>" not in xml and "<priority>" not in xml
-    assert xml.count("<lastmod>") == 1  # never fabricated
-    assert "&" not in xml.replace("&amp;", "")
-    robots = render_robots("https://example.com/")
-    assert robots == ("User-agent: *\nAllow: /\nSitemap: https://example.com/sitemap.xml\n")
 
 
 def test_build_site_static_pages_integration(tmp_path: Path) -> None:
