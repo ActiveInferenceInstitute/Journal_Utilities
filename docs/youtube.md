@@ -111,13 +111,19 @@ Dry-run by default; live writes require `--apply` AND OAuth
   metadata.json.
 - Quota accounting: `captions.list`=1, `captions.insert`=400 units against
   `--quota-budget` (default 10,000/day) and `--max-uploads-per-day`
-  (default 24; 24 x 401 = 9,624 units fits the default budget).
+  (default 24; 24 x (400 + 1) = 9,624 units fits the default budget).
+  `captions.insert` sends `isDraft=false` explicitly (draft tracks would
+  need a second media upload to publish).
 - Translation wave (V5): opt-in `--upload-translations` with default
   languages `zh-Hans,de` (DAF 2026-09); es/pt/fr/ja deferred.
 
 ### 6. Worklist (`scripts/captions_worklist.py`)
 
-Read-only CSV planner ranking videos by handoff priority:
-insights > top-by-views > fundamentals-2026 > rest, with per-part SRT
-availability (`srt_available` column). Output feeds the upload script's
-`--worklist`; the upload script re-verifies every row live.
+Read-only CSV planner ranking all 573 INDEX items by handoff priority
+(insights > top-by-views > fundamentals-2026 > rest), with per-part SRT
+availability (`srt_available`). View counts: `--fetch-views` pulls them via
+Data API `videos.list` (1 unit per 50 ids, read-only API key; handoff rule
+10 forbids yt-dlp) and caches them at `data/output/captions_views_cache.json`
+so repeat runs cost 0 units. Output feeds the upload script's `--worklist`;
+the upload script re-verifies every row live (skip-if-existing-track), so
+local files only pre-rank and never gate a write.

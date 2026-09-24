@@ -44,7 +44,7 @@ _SESS_SUFFIX_RE = re.compile(r"_sess\d+$")
 _LABEL_RE = re.compile(r"^\S[^:\n]{0,78}:")
 
 
-def _srt_timestamp(seconds: float) -> str:
+def srt_timestamp(seconds: float) -> str:
     """Format float seconds as SRT ``HH:MM:SS,mmm``."""
     seconds = max(0.0, seconds)
     # Round to milliseconds FIRST, then decompose — ms rounding can carry
@@ -171,7 +171,7 @@ def segments_to_srt(segments: list[dict[str, Any]]) -> str:
     out: list[str] = []
     for idx, cue in enumerate(cues, 1):
         out.append(str(idx))
-        out.append(f"{_srt_timestamp(cue['start'])} --> {_srt_timestamp(cue['end'])}")
+        out.append(f"{srt_timestamp(cue['start'])} --> {srt_timestamp(cue['end'])}")
         out.extend(cue["lines"])
         out.append("")
     if not out:

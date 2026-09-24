@@ -19,6 +19,7 @@ from journal_utilities.youtube.captions import (
     segments_for_video,
     segments_to_srt,
     speaker_mapping,
+    srt_timestamp,
     wrap_lines,
 )
 
@@ -120,11 +121,9 @@ def test_segments_to_srt_structure() -> None:
 
 
 def test_srt_timestamp_formatting_and_carry() -> None:
-    from journal_utilities.youtube.captions import _srt_timestamp
-
-    assert _srt_timestamp(59.9996) == "00:01:00,000"  # ms rounding carries into s
-    assert _srt_timestamp(59.9994) == "00:00:59,999"
-    assert _srt_timestamp(-3.0) == "00:00:00,000"
+    assert srt_timestamp(59.9996) == "00:01:00,000"  # ms rounding carries into s
+    assert srt_timestamp(59.9994) == "00:00:59,999"
+    assert srt_timestamp(-3.0) == "00:00:00,000"
 
 
 # ------------------------------------------------------ speaker name mapping

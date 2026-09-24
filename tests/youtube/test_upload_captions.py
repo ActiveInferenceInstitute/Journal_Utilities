@@ -54,8 +54,10 @@ class FakeCaptionClient:
     def list_captions(self, video_id: str) -> list[dict]:
         return copy.deepcopy(self.tracks_by_video.get(video_id, []))
 
-    def insert_caption(self, video_id: str, name: str, language: str, path: str) -> dict | None:
-        self.inserted.append((video_id, name, language, path))
+    def insert_caption(
+        self, video_id: str, name: str, language: str, path: str, *, is_draft: bool = True
+    ) -> dict | None:
+        self.inserted.append((video_id, name, language, path, is_draft))
         if video_id in self.fail_for:
             return None
         return {"kind": "youtube#caption", "id": f"cap-{video_id}"}
@@ -179,7 +181,7 @@ def test_uploads_over_asr_only_track(tmp_path: Path) -> None:
     result = upload_captions_for_video(ctx, make_row(journal))
     assert result["action"] == "uploaded"
     assert client.inserted == [
-        ("vid1", TRACK_NAME, TRACK_LANGUAGE, str(tmp_path / "staging" / "vid1.en.srt"))
+        ("vid1", TRACK_NAME, TRACK_LANGUAGE, str(tmp_path / "staging" / "vid1.en.srt"), False)
     ]
     recorded = json.loads((item / "metadata.json").read_text())["captions_uploaded"]["vid1"]
     assert recorded["track_name"] == TRACK_NAME
@@ -272,10 +274,12 @@ def test_backup_written_before_insert(tmp_path: Path) -> None:
 
     real_insert = client.insert_caption
 
-    def spy_insert(video_id: str, name: str, language: str, path: str) -> dict | None:
+    def spy_insert(
+        video_id: str, name: str, language: str, path: str, *, is_draft: bool = True
+    ) -> dict | None:
         backups = list(backup_dir.rglob("*-captions.json")) if backup_dir.exists() else []
         seen.append(bool(backups))
-        return real_insert(video_id, name, language, path)
+        return real_insert(video_id, name, language, path, is_draft=is_draft)
 
     client.insert_caption = spy_insert  # type: ignore[method-assign]
     upload_captions_for_video(ctx, make_row(journal))

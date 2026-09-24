@@ -32,6 +32,7 @@ class FakeService:
         self.channel_uploads = channel_uploads
         self.playlist_pages = playlist_pages or []
         self.video_updates: list[dict] = []
+        self.caption_inserts: list[dict] = []
         self.videos_listed: list[str] = []
         self.update_called = False
 
@@ -98,10 +99,17 @@ class FakeService:
 
     @property
     def captions(self):
+        service = self
+
         class Captions:
             @staticmethod
             def list(*, part, videoId, **_):  # noqa: N803 — mirrors Data API param name
                 return FakeRequest({"items": [{"id": "cap1", "snippet": {"videoId": videoId}}]})
+
+            @staticmethod
+            def insert(*, part, body, media_body, **_):
+                service.caption_inserts.append(body)
+                return FakeRequest({"id": "cap2", **body})
 
         return Captions
 
@@ -216,6 +224,33 @@ def test_list_captions_and_playlists():
     client = YouTubeClient(service=FakeService())
     assert client.list_captions("vid1")[0]["id"] == "cap1"
     assert client.list_playlists("UCxyz")[0]["id"] == "pl1"
+
+
+def test_insert_caption_body_includes_isdraft(tmp_path):
+    srt = tmp_path / "v.en.srt"
+    srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nHi\n", encoding="utf-8")
+    service = FakeService()
+    client = YouTubeClient(service=service)
+    client.insert_caption("vid1", "English (Active Inference Journal)", "en", str(srt))
+    assert service.caption_inserts == [
+        {
+            "snippet": {
+                "name": "English (Active Inference Journal)",
+                "language": "en",
+                "videoId": "vid1",
+                "isDraft": False,
+            }
+        }
+    ]
+
+
+def test_list_videos_batches_50_per_call():
+    service = FakeService(videos_by_id={f"vid{i:02d}": {"title": f"V{i}"} for i in range(60)})
+    client = YouTubeClient(service=service)
+    items = client.list_videos([f"vid{i:02d}" for i in range(60)])
+    assert len(items) == 60
+    assert len(service.videos_listed) == 2  # 50 + 10, two 1-unit calls
+    assert service.videos_listed[0].count(",") == 49  # 50 ids in the first batch
 
 
 def test_quota_costs_match_handoff_budget():

@@ -27,13 +27,30 @@ import argparse
 import csv
 import json
 import logging
+import os
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_JOURNAL = REPO_ROOT.parent / "ActiveInferenceJournal"
+
+
+def _default_journal() -> Path:
+    """Locate the sibling ActiveInferenceJournal checkout.
+
+    The documented layout is ``../ActiveInferenceJournal``; nested worktree
+    checkouts (e.g. ``worktrees/<repo>/<branch>``) put the sibling higher,
+    so walk up a bounded number of levels before giving up.
+    """
+    for parent in REPO_ROOT.parents[:3]:
+        candidate = parent / "ActiveInferenceJournal"
+        if candidate.is_dir():
+            return candidate
+    return REPO_ROOT.parent / "ActiveInferenceJournal"
+
+
+DEFAULT_JOURNAL = _default_journal()
 CHANNEL_VIDEOS = REPO_ROOT / "data/output/channel_videos.json"
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -53,6 +70,29 @@ PRIORITY_NAMES = {
 
 _NAMJOHOSHI = re.compile(r"Namjoshi2026/")
 _FUNDAMENTALS = re.compile(r"Fundamentals", re.IGNORECASE)
+
+
+def resolve_journal_dir(root: Path) -> Path:
+    """Resolve a journal checkout root for the sibling-worktree layout.
+
+    When INDEX.json is absent at ``root`` but present one level down (branch
+    checkouts like ``feat-m4-pages/``), use the most recently modified one
+    and say so — silently reading a stale branch's INDEX is worse than
+    surfacing the choice. Returns ``root`` unchanged when nothing resolves.
+    """
+    if (root / "INDEX.json").is_file():
+        return root
+    candidates = sorted(
+        (p.parent for p in root.glob("*/INDEX.json")),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if candidates:
+        logger.warning(
+            "INDEX.json not at %s; using most recent branch checkout %s", root, candidates[0]
+        )
+        return candidates[0]
+    return root
 
 
 def load_json(path: Path) -> Any:  # noqa: ANN401
@@ -169,6 +209,50 @@ def load_views_map(channel_videos_path: Path) -> dict[str, int]:
     return out
 
 
+def fetch_views(journal_dir: Path, views_map: dict[str, int], cache_path: Path) -> dict[str, int]:
+    """Fill ``views_map`` from the Data API, caching results on disk.
+
+    videos.list is 1 unit per call regardless of size (up to 50 ids), so
+    ~740 videos cost ~15 calls once; the cache makes every repeat run
+    free. Read-only: an API key suffices, no OAuth, no writes to YouTube.
+    """
+    cached: dict[str, int] = {}
+    if cache_path.is_file():
+        cached = load_json(cache_path) or {}
+        if not isinstance(cached, dict):
+            cached = {}
+    merged: dict[str, int] = dict(views_map)
+    merged.update({k: int(v) for k, v in cached.items() if isinstance(v, int)})
+
+    index = load_json(journal_dir / "INDEX.json") or {}
+    ids: list[str] = []
+    for item in index.get("items") or []:
+        if isinstance(item, dict):
+            ids.extend(v for v in item.get("parts") or [] if isinstance(v, str) and v)
+    missing = [vid for vid in dict.fromkeys(ids) if vid not in merged]
+    if not missing:
+        return merged
+
+    try:
+        from journal_utilities.youtube.client import YouTubeClient
+
+        client = YouTubeClient(api_key=os.environ.get("YOUTUBE_API_KEY"))
+        calls = (len(missing) + 49) // 50
+        logger.info("videos.list: %d ids in %d calls (1 unit each)", len(missing), calls)
+        for item in client.list_videos(missing, part="statistics"):
+            vid = item.get("id")
+            views = (item.get("statistics") or {}).get("viewCount")
+            if vid and views is not None:
+                merged[str(vid)] = int(views)
+    except Exception as exc:  # noqa: BLE001 — planning tool: degrade to manifest views
+        logger.error("videos.list fetch failed (%s); ranking without new views", exc)
+        return merged
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(merged, indent=1, sort_keys=True), encoding="utf-8")
+    logger.info("views cache written: %s (%d ids)", cache_path, len(merged))
+    return merged
+
+
 def write_csv(rows: list[dict[str, Any]], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
@@ -209,13 +293,32 @@ def main() -> int:
         "--channel-videos",
         type=Path,
         default=CHANNEL_VIDEOS,
-        help="Channel manifest for view counts (optional)",
+        help="Channel manifest for view counts (optional, heuristic)",
+    )
+    parser.add_argument(
+        "--fetch-views",
+        action="store_true",
+        help=(
+            "Fetch view counts via Data API videos.list (1 unit per call, "
+            "50 ids per call, read-only API key suffices; handoff rule 10: "
+            "Data API only, never yt-dlp). Results cached at --views-cache "
+            "so repeat ranking runs cost 0 units."
+        ),
+    )
+    parser.add_argument(
+        "--views-cache",
+        type=Path,
+        default=REPO_ROOT / "data/output/captions_views_cache.json",
+        help="JSON cache for --fetch-views (video_id -> viewCount)",
     )
     parser.add_argument("--limit", type=int, default=0, help="Emit only the first N rows (0 = all)")
     args = parser.parse_args()
 
+    journal_dir = resolve_journal_dir(args.journal)
     views_map = load_views_map(args.channel_videos)
-    rows = build_worklist(args.journal, views_map)
+    if args.fetch_views:
+        views_map = fetch_views(journal_dir, views_map, args.views_cache)
+    rows = build_worklist(journal_dir, views_map)
     if not rows:
         return 1
     if args.limit > 0:

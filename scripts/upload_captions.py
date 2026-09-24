@@ -219,7 +219,9 @@ def upload_captions_for_video(ctx: UploadContext, row: dict[str, str]) -> dict[s
     srt_file.parent.mkdir(parents=True, exist_ok=True)
     srt_file.write_text(srt, encoding="utf-8")
 
-    response = ctx.client.insert_caption(vid, TRACK_NAME, TRACK_LANGUAGE, str(srt_file))
+    response = ctx.client.insert_caption(
+        vid, TRACK_NAME, TRACK_LANGUAGE, str(srt_file), is_draft=False
+    )
     if not response:
         result["reason"] = "captions.insert failed (see client log)"
         return result
@@ -336,7 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    from captions_worklist import build_worklist, load_views_map, write_csv
+    from captions_worklist import build_worklist, load_views_map, resolve_journal_dir, write_csv
 
     from journal_utilities.youtube.client import QuotaLedger
 
@@ -353,10 +355,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         logger.info("Dry-run: no API client will be built; no writes will occur.")
 
+    journal_dir = resolve_journal_dir(args.journal)
     if args.worklist and args.worklist.is_file():
         rows = load_worklist_csv(args.worklist)
     else:
-        rows = build_worklist(args.journal, load_views_map(DATA_DIR / "output/channel_videos.json"))
+        rows = build_worklist(journal_dir, load_views_map(DATA_DIR / "output/channel_videos.json"))
         rows = [{k: str(v) for k, v in r.items()} for r in rows]
         write_csv(rows, DATA_DIR / "output/captions_worklist.csv")
     if args.limit > 0:
@@ -365,7 +368,7 @@ def main(argv: list[str] | None = None) -> int:
     ctx = UploadContext(
         client=client,
         ledger=ledger,
-        journal_dir=args.journal,
+        journal_dir=journal_dir,
         apply=args.apply,
         backup_dir=args.backup_dir,
         max_uploads=args.max_uploads_per_day,
