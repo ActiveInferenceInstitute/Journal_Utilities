@@ -14,7 +14,10 @@ Design:
 - Google libraries are imported lazily so the module is importable (and
   testable with fakes) without google-api-python-client present.
 - OAuth (scope ``youtube.force-ssl``) is required for writes; an API key alone
-  only builds a read-only service.
+  only builds a read-only service. OAuth token owner (DAF, 2026-09):
+  **admin@activeinference.institute** — the org account
+  ``ActiveInferenceInstitute``. The ``ActInfInstitute`` account is
+  personal/admin: do NOT authorize writes with it.
 - :class:`QuotaLedger` implements the per-call quota accounting mandated by the
   handoff (videos.update=50, captions.insert=400, playlistItems.insert=50,
   list=1) against the 10,000 units/day default budget.
@@ -320,9 +323,14 @@ class YouTubeClient:
         return UpdateResult(success=True)
 
     def insert_caption(
-        self, video_id: str, name: str, language: str, path: str
+        self, video_id: str, name: str, language: str, path: str, *, is_draft: bool = False
     ) -> dict[str, Any] | None:
-        """Upload a caption track (captions.insert, 400 units). Requires OAuth."""
+        """Upload a caption track (captions.insert, 400 units). Requires OAuth.
+
+        ``is_draft`` maps to the snippet ``isDraft`` field; journal uploads
+        always pass ``is_draft=False`` (a draft track would need a second
+        media upload to publish).
+        """
         from googleapiclient.http import MediaFileUpload
 
         media = MediaFileUpload(path, mimetype="application/octet-stream", resumable=False)
@@ -331,7 +339,14 @@ class YouTubeClient:
                 self.service.captions()
                 .insert(
                     part="snippet",
-                    body={"snippet": {"name": name, "language": language, "videoId": video_id}},
+                    body={
+                        "snippet": {
+                            "name": name,
+                            "language": language,
+                            "videoId": video_id,
+                            "isDraft": is_draft,
+                        }
+                    },
                     media_body=media,
                 )
                 .execute()
@@ -340,6 +355,31 @@ class YouTubeClient:
             logger.error("captions.insert failed for %s: %s", video_id, exc)
             return None
         return dict(response)
+
+    def list_videos(
+        self, video_ids: list[str], part: str = "snippet,statistics"
+    ) -> list[dict[str, Any]]:
+        """videos.list (1 unit per call; up to 50 comma-separated ids each).
+
+        Read-only: works with an API-key service. Used by the captions
+        worklist to fetch view counts without yt-dlp (handoff rule 10).
+        """
+        out: list[dict[str, Any]] = []
+        for i in range(0, len(video_ids), 50):
+            chunk = [vid for vid in video_ids[i : i + 50] if vid]
+            if not chunk:
+                continue
+            try:
+                response = (
+                    self.service.videos()
+                    .list(part=part, id=",".join(chunk), maxResults=50)
+                    .execute()
+                )
+            except Exception as exc:
+                logger.error("videos.list failed for batch %d: %s", i // 50, exc)
+                continue
+            out.extend(response.get("items", []))
+        return out
 
     def insert_playlist(
         self, title: str, description: str = "", privacy_status: str = "public"

@@ -74,3 +74,56 @@ Heuristic engine to parse video titles into structured metadata (Category, Serie
 - `channel_id`: Source channel
 - `enumerated_at`: Timestamp
 - `videos`: List of `VideoInfo`
+
+## Caption Pipeline (M5)
+
+### 4. SRT Derivation (`captions.py`)
+
+Derives uploadable SRT captions from the journal's WhisperX `transcript.json`
+(blocks of `{video_id, segments}`):
+
+- Speaker labels rendered on speaker change, mapped names from
+  metadata.json `parts[].speakers`; unmapped `SPEAKER_NN` humanized to
+  `Speaker N`.
+- Cues wrapped to at most two lines of 42 characters; long segments split
+  across sequential cues with proportional timing.
+- `_sessNN`-suffixed transcript ids resolve against the base part id.
+
+```python
+from journal_utilities.youtube.captions import derive_srt_for_video
+
+srt = derive_srt_for_video(item_dir, video_id)  # None when not derivable
+```
+
+### 5. Caption Upload (`scripts/upload_captions.py`)
+
+Dry-run by default; live writes require `--apply` AND OAuth
+(`youtube.force-ssl`; token owner **admin@activeinference.institute**).
+
+- `captions.list` gate: videos with an existing non-ASR track (or a track
+  named `English (Active Inference Journal)`) are skipped.
+- Track name `English (Active Inference Journal)`, language `en`,
+  `isDraft=false`; SRT staged under `data/output/captions_upload/` — the
+  journal checkout is read-only input.
+- Backups before every write (captions.list snapshot + pre-update metadata
+  copy) to `data/output/yt_backup/<video_id>/<timestamp>-captions.json`;
+  success records `captions_uploaded` with provenance in the item's
+  metadata.json.
+- Quota accounting: `captions.list`=1, `captions.insert`=400 units against
+  `--quota-budget` (default 10,000/day) and `--max-uploads-per-day`
+  (default 24; 24 x (400 + 1) = 9,624 units fits the default budget).
+  `captions.insert` sends `isDraft=false` explicitly (draft tracks would
+  need a second media upload to publish).
+- Translation wave (V5): opt-in `--upload-translations` with default
+  languages `zh-Hans,de` (DAF 2026-09); es/pt/fr/ja deferred.
+
+### 6. Worklist (`scripts/captions_worklist.py`)
+
+Read-only CSV planner ranking all 573 INDEX items by handoff priority
+(insights > top-by-views > fundamentals-2026 > rest), with per-part SRT
+availability (`srt_available`). View counts: `--fetch-views` pulls them via
+Data API `videos.list` (1 unit per 50 ids, read-only API key; handoff rule
+10 forbids yt-dlp) and caches them at `data/output/captions_views_cache.json`
+so repeat runs cost 0 units. Output feeds the upload script's `--worklist`;
+the upload script re-verifies every row live (skip-if-existing-track), so
+local files only pre-rank and never gate a write.

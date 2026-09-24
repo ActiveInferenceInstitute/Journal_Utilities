@@ -3,6 +3,11 @@
 Derive base English captions/*.srt files from diarized transcript.json for items
 that currently lack caption SRTs.
 
+Timestamp formatting delegates to the canonical implementation in
+``journal_utilities.youtube.captions`` (which also adds speaker labels and
+42-char two-line wrapping for the upload path — this script writes the plain
+per-segment form the journal captions/ dirs hold).
+
 Usage:
     python scripts/derive_captions_from_json.py --journal ../ActiveInferenceJournal
     python scripts/derive_captions_from_json.py --journal ../ActiveInferenceJournal --apply
@@ -13,19 +18,7 @@ import json
 import sys
 from pathlib import Path
 
-
-def sec_to_srt_time(sec: float) -> str:
-    """Format float seconds to SRT timestamp HH:MM:SS,mmm."""
-    if sec < 0:
-        sec = 0.0
-    h = int(sec // 3600)
-    m = int((sec % 3600) // 60)
-    s = int(sec % 60)
-    ms = int(round((sec - int(sec)) * 1000))
-    if ms >= 1000:
-        s += 1
-        ms = 0
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+from journal_utilities.youtube.captions import srt_timestamp as sec_to_srt_time
 
 
 def segments_to_srt(segments: list[dict]) -> str:
@@ -110,7 +103,7 @@ def derive_captions(journal_dir: Path, apply: bool = False) -> dict[str, int]:
             if part_title:
                 clean_name = f"{part_title}.eng(transcribed).srt"
             elif len(data) > 1:
-                clean_name = f"{item_id}_part{idx+1}_{vid}.eng(transcribed).srt"
+                clean_name = f"{item_id}_part{idx + 1}_{vid}.eng(transcribed).srt"
             else:
                 clean_name = f"{item_id}_{vid}.eng(transcribed).srt"
 
@@ -135,7 +128,9 @@ def main() -> int:
 
     stats = derive_captions(args.journal, apply=args.apply)
     mode = "Applied" if args.apply else "Preview (dry-run)"
-    print(f"{mode}: {stats['created']} caption SRTs derived from transcript.json ({stats['skipped']} items already had SRTs).")
+    print(
+        f"{mode}: {stats['created']} caption SRTs derived from transcript.json ({stats['skipped']} items already had SRTs)."
+    )
     return 0
 
 
