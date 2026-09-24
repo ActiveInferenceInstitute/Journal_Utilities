@@ -361,3 +361,33 @@ keys. On the canonical repo the same change lifts language-bearing items from
 **Follow-up:** J2/M2 still owns the `Translations/` → `translations/` git mv +
 BCP-47 normalization (`chi` → `zh-Hans`, `dut` → `nl`, …); this fix is the
 reader-side bridge until that migration lands.
+
+## M5 — YouTube dead-link description repair (2026-09-24, channel UCbPq2w41ZaJSWtpCq4BE6Dg)
+
+**Problem:** 284 video descriptions on the Active Inference channel embed a dead
+`github.com/ActiveInferenceInstitute/ActiveInferenceJournal/blob/main/transcripts/<id>.md`
+link. The transcripts moved into the journal data tree; the blob URLs 404.
+
+**Fix (in flight / mostly done):**
+- `scripts/sync_youtube_metadata.py` replaces the dead blob link with the
+  resolving `tree/main/data/video/.../<item>` journal URL (abstract, chapters,
+  tags preserved; audit-fix plan in untracked `data/output/audit_fix_plan.json`).
+- Rule 1 held throughout: every write preceded by a same-run Data API fetch,
+  a pre-update backup (`data/output/yt_backup/<id>/<ts>.json`), and a reviewed
+  284-video dry-run diff. 171/284 descriptions live and verify-PASSED on
+  2026-09-24; the remaining 113 run after the PT-midnight quota reset.
+- Hardening landed on `main` this session: `youtube/client.py` now bounds all
+  Data API requests with a 120 s socket timeout (a dead connection had stalled
+  a `videos.update` indefinitely), and the sync script skips unchanged snippets
+  (idempotency guard: 1 read unit instead of a 50-unit write; regression test
+  `test_idempotent_run_skips_write`).
+- Docs: `docs/privacy.md` added and indexed (pipeline touches only the
+  Institute's own public content; writes are OAuth `youtube.force-ssl` under
+  `admin@activeinference.institute`).
+
+**Follow-up:** complete the final 113 (manifest rebuilt from PASSED-log
+evidence, first id `wDYI7pOGamI`); after full 284/284, restore the full
+channel manifest from `data/output/channel_videos_all.json.bak`, spot-check
+2–3 live, and close this ledger entry. If the 10× quota extension is granted,
+the deferred 84-video backlog from the original audit can run in the same
+window.
