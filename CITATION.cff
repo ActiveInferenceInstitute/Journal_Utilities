@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "Journal-Utilities"
+title: "Journal_Utilities"
 abstract: >-
   Modular, config-driven pipeline for processing the Active Inference
   Institute video library: YouTube channel enumeration and download,
