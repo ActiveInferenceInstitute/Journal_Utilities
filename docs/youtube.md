@@ -74,3 +74,57 @@ Heuristic engine to parse video titles into structured metadata (Category, Serie
 - `channel_id`: Source channel
 - `enumerated_at`: Timestamp
 - `videos`: List of `VideoInfo`
+
+### 4. Chapter Generation (`chapter_generator.py`)
+
+Generates timestamped YouTube chapters from transcript segments via a local
+Ollama model or OpenRouter, then enforces a hard quality gate
+(`validate_chapters`). Only gate-passing — or YouTube-sourced — chapter
+lists flow downstream (journal `sessions[]` seeding, description writes).
+
+**Gate rules** (any violation rejects the list; generation retries up to
+`max_attempts` and raises `ChapterError` if still failing):
+
+| Rule | Threshold |
+| :--- | :--- |
+| Chapter count | >= 3 |
+| First chapter | starts at exactly 0:00 |
+| Gaps | >= 10s between consecutive chapters |
+| Coverage | last chapter starts at >= 80% of total duration |
+| Titles | 3-8 words, <= 60 characters |
+| Filler words | none of `uh`, `um`, `so`, `like` |
+| Speaker names | no bare personal-name titles ("Karl Friston") |
+
+**Windowed generation**: the full transcript is rendered as 3-5 minute
+time-windowed blocks (never truncated at the head), and the video's total
+duration is passed in explicitly — the old 40k-char excerpt truncated long
+videos' tails, which is why 240/416 generated lists previously ended before
+60% of the video.
+
+```python
+from journal_utilities.youtube.chapter_generator import ChapterGenerator
+
+gen = ChapterGenerator(backend="ollama")  # or "openrouter"
+chapters = gen.generate_chapters(
+    title="Session 042",
+    transcript_segments=segments,
+    total_duration_seconds=5400.0,  # authoritative, from the manifest
+)
+```
+
+### 5. Chapter Caches (`data/input/`)
+
+| File | Source | Format |
+| :--- | :--- | :--- |
+| `video_chapters.json` | YouTube (creator/auto chapters via yt-dlp) | `{video_id: [{start, title}, ...]}` — plain lists are YouTube-sourced by definition |
+| `video_chapters_llm.json` | LLM (gemma3:4b, Aug 2026 batch) | `{video_id: {source: "llm", model, generated_at, chapters: [...]}}` — every payload carries `{source, model, generated_at}` provenance |
+
+Rules:
+
+- The 267 YouTube-authored lists (restored from commit `3a33326`) are
+  trusted as-is; **never overwrite them with LLM output**. LLM generation
+  must write to `video_chapters_llm.json` only
+  (`save_generated_chapters()` refuses YouTube-sourced targets).
+- `enrich_metadata.py` seeds journal `sessions[]` only from YouTube-sourced
+  lists or LLM lists that pass `validate_chapters` with the part's
+  duration; unprovenanced cache entries are never seeded.

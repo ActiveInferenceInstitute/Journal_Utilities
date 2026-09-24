@@ -288,6 +288,19 @@ root `AGENTS.md` mock-policy reconciled; `docs/REFACTOR_READINESS.md` marked a h
       (`-m` module paths and `scripts/*.py` args in `Makefile`, plus every
       `scripts/…py` mention in `docs/*.md`). All resolve; no stale commands found
       this pass. Acceptance: zero missing refs in the same mechanical scan. ✓
+- [x] **Y2/Y16 chapter provenance & gate** — `video_chapters.json` restored
+      from `3a33326` (267 YouTube-authored lists, byte-identical; the August
+      gemma3:4b batch had overwritten 115 of them and generated 457 more);
+      LLM output relocated to `video_chapters_llm.json` with
+      `{source, model, generated_at}` provenance. `validate_chapters()` gate
+      (≥3 chapters, first at 0:00, gaps ≥10s, last ≥80% of duration, titles
+      3-8 words ≤60 chars, no filler, no bare speaker names) enforced in
+      generation and in `enrich_metadata.py` session seeding (LLM lists need
+      the part duration to prove coverage). Deferred: OpenRouter backfill for
+      the ~720-video corpus (M5, needs DAF budget sign-off); recalibrate the
+      speaker-name stop list against new-model output when it lands. ✓
+      `fix(youtube): restore YouTube chapters, add validate_chapters gate [Y2/Y16]`
+      (commit `cd2dc7c`)
 - [ ] **Documentation test-count snapshot drift** — `tests/README.md` /
       `tests/AGENTS.md` counts are dated snapshots by policy; refresh from a live
       `uv run pytest tests/ -q` whenever a pass touches tests. Deferred: this

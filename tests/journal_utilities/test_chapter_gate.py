@@ -227,6 +227,11 @@ class TestRuleSpeakerNames:
             "Karl Friston on Free Energy",
             "Free Energy Principle with Karl Friston",
             "Friston's Free Energy Formulation",
+            # Corpus-calibrated concept titles that must never flag
+            "Mean Field Approximation",
+            "Predictive Coding",
+            "Next Steps",
+            "Matter Consciousness",
         ],
     )
     def test_topical_titles_with_names_pass(self, title):
@@ -234,6 +239,21 @@ class TestRuleSpeakerNames:
         chapters[1]["title"] = title
         report = validate_chapters(chapters, duration_seconds=DURATION)
         assert not any("speaker-name" in f for f in report.failures)
+
+    @pytest.mark.parametrize(
+        "title",
+        [
+            "Kenneth Wilford",
+            "Nynke Boiten",
+            "Takuya Isomura",
+            "Mahault Albarracin",
+        ],
+    )
+    def test_real_guest_names_fail(self, title):
+        chapters = good_chapters()
+        chapters[1]["title"] = title
+        report = validate_chapters(chapters, duration_seconds=DURATION)
+        assert any("speaker-name" in f for f in report.failures)
 
 
 # ---------------------------------------------------------------------------
