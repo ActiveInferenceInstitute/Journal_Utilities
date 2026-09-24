@@ -1,129 +1,46 @@
-# YouTube Module
+# YouTube integration
 
-The YouTube module (`src/journal_utilities/youtube/`) handles the discovery and categorization of content from the Active Inference Institute channel.
+The YouTube surface is **read-mostly with an explicitly guarded write path**.
+Everything here enforces the pipeline handoff rules (see the repo root
+`AGENTS.md` and `docs/m3-ingest.md`):
 
-## Architecture
+- **Rule 1 — no write without a live snippet.** `scripts/sync_youtube_metadata.py`
+  refuses to update a video unless the live snippet was fetched through the
+  Data API **in the same run**. The yt-dlp/manifest fallbacks are read-only
+  inputs; they can never feed a write (all 735 manifest descriptions are
+  empty strings — a fallback write would erase abstracts and credits).
+- **Backups before every write.** Pre-update state is saved to
+  `data/output/yt_backup/<video_id>/<timestamp>.json`.
+- **Dry-run by default.** Every YouTube command prints an old-vs-new diff;
+  live writes require the explicit `--apply` flag.
+- **Quota-aware.** Default 10,000 units/day. Per-call costs:
+  `videos.update` 50, `captions.insert` 400, `playlistItems.insert` 50,
+  `list` 1. Use `--quota-budget` for accounting; `live_batch.sh` defaults to
+  a quota-safe `MAX_VIDEOS=150`.
 
-This module does **not** use the YouTube Data API v3 for enumeration, avoiding quota limits. Instead, it uses `yt-dlp`'s flat-playlist extraction features.
+## OAuth ownership
 
-## Components
+The `youtube.force-ssl` OAuth grant belongs to the **Institute admin account**
+(`admin@activeinference.institute`; org `ActiveInferenceInstitute`). The
+`ActInfInstitute` account is the personal/admin identity — do not issue write
+credentials from it. Secrets come from env (`YOUTUBE_API_KEY`,
+`YOUTUBE_OAUTH_*`) or GitHub secrets; never commit cookies or tokens.
 
-### 1. Channel Enumeration (`channel.py`)
+## Surfaces
 
-Enumerates all videos on the channel.
+| Surface | Purpose |
+| --- | --- |
+| `src/journal_utilities/youtube/client.py` | Vendored minimal Data API client (`videos.list/update`, `captions.list/insert`, `playlists.*`, `playlistItems.*`). API key = read-only; OAuth only needed for writes. Unit-tested against fake services. |
+| `scripts/sync_youtube_metadata.py` | Description/metadata sync with Rule-1 guard, backups, quota budget, `--dry-run` default. |
+| `scripts/audit_live_descriptions.py` | **Read-only** audit listing live videos that carry the dead `/blob/main/transcripts/` link or the `--- RESOURCES & TRANSCRIPT ---` block. |
+| `scripts/live_batch.sh` | Batch driver, repo-relative paths, quota-safe defaults. |
+| `src/journal_utilities/ingest/` | Weekly channel enumeration / scaffold / reconciliation (M3) — read-only, ~32 quota units per run. |
+| `scripts/upload_captions.py` | Caption uploads (M5): skips existing non-ASR tracks, prefers WhisperX-derived SRTs, quota-scheduled (~24/day). First-wave translation targets: `zh-Hans`, `de`. |
 
-- **Method**: unions the channel's `/videos`, `/streams`, and `/shorts` tabs via
-  `yt-dlp --flat-playlist --dump-json` and dedupes by video id. (The older
-  "Uploads" playlist form `UU...` truncates at ~100 entries, so it is no longer used.)
-- **Output**: `ChannelManifest` containing `VideoInfo` objects.
-- **Performance**: Can list 1000+ videos in seconds without downloading media.
+## Local checks
 
-```python
-from journal_utilities.youtube.channel import enumerate_channel_videos
-
-manifest = enumerate_channel_videos("UCbPq2w41ZaJSWtpCq4BE6Dg")
-print(f"Found {manifest.total_videos} videos")
+```bash
+make yt-dryrun                          # dry-run the sync (no VIDEO = full plan)
+make yt-dryrun VIDEO=<video_id>         # one video, old-vs-new diff + backup path
+uv run pytest tests/youtube tests/scripts -q
 ```
-
-### 2. Playlist Enumeration (`playlist.py`)
-
-Enumerates all playlists created by the channel.
-
-- **Method**: Scrapes the `/playlists` tab via `yt-dlp`.
-- **Output**: `PlaylistManifest` containing playlist metadata and video lists.
-
-### 3. Categorizer (`categorizer.py`)
-
-Heuristic engine to parse video titles into structured metadata (Category, Series, Episode).
-
-- **Logic**: Regex pattern matching against known show formats.
-- **Supported Formats**:
-  - Livestreams (`Livestream #001.1`)
-  - GuestStreams
-  - OrgStreams
-  - MathStreams
-  - ModelStreams
-  - Textbook Groups
-  - Symposia
-
-#### Example Parsing
-
-| Input Title | Category | Series | Episode |
-| :--- | :--- | :--- | :--- |
-| `Active Inference Livestream #042.1` | `Livestream` | `Livestream_042` | `1` |
-| `GuestStream #015.1: John Doe` | `GuestStream` | `GuestStream_015` | `1` |
-| `OrgStream #003.1` | `OrgStream` | `OrgStream_003` | `1` |
-| `MathStream #001.2: Category Theory` | `MathStream` | `MathStream_001` | `2` |
-| `Applied Active Inference Symposium 2021 part 1` | `Symposium` | `2021` | `1` |
-| `Textbook Group Cohort 3 Meeting 5` | `TextbookGroup` | `Cohort_3` | `Meeting_005` |
-
-## Data Models
-
-### `VideoInfo`
-
-- `id`: YouTube ID (11 chars)
-- `title`: Video title
-- `upload_date`: YYYYMMDD
-- `duration`: Seconds
-- `description`: Video description
-- `view_count`: Approximate views
-- `url`: `https://www.youtube.com/watch?v=<id>` (auto-built from `id`)
-
-### `ChannelManifest`
-
-- `channel_id`: Source channel
-- `enumerated_at`: Timestamp
-- `videos`: List of `VideoInfo`
-
-## Caption Pipeline (M5)
-
-### 4. SRT Derivation (`captions.py`)
-
-Derives uploadable SRT captions from the journal's WhisperX `transcript.json`
-(blocks of `{video_id, segments}`):
-
-- Speaker labels rendered on speaker change, mapped names from
-  metadata.json `parts[].speakers`; unmapped `SPEAKER_NN` humanized to
-  `Speaker N`.
-- Cues wrapped to at most two lines of 42 characters; long segments split
-  across sequential cues with proportional timing.
-- `_sessNN`-suffixed transcript ids resolve against the base part id.
-
-```python
-from journal_utilities.youtube.captions import derive_srt_for_video
-
-srt = derive_srt_for_video(item_dir, video_id)  # None when not derivable
-```
-
-### 5. Caption Upload (`scripts/upload_captions.py`)
-
-Dry-run by default; live writes require `--apply` AND OAuth
-(`youtube.force-ssl`; token owner **admin@activeinference.institute**).
-
-- `captions.list` gate: videos with an existing non-ASR track (or a track
-  named `English (Active Inference Journal)`) are skipped.
-- Track name `English (Active Inference Journal)`, language `en`,
-  `isDraft=false`; SRT staged under `data/output/captions_upload/` — the
-  journal checkout is read-only input.
-- Backups before every write (captions.list snapshot + pre-update metadata
-  copy) to `data/output/yt_backup/<video_id>/<timestamp>-captions.json`;
-  success records `captions_uploaded` with provenance in the item's
-  metadata.json.
-- Quota accounting: `captions.list`=1, `captions.insert`=400 units against
-  `--quota-budget` (default 10,000/day) and `--max-uploads-per-day`
-  (default 24; 24 x (400 + 1) = 9,624 units fits the default budget).
-  `captions.insert` sends `isDraft=false` explicitly (draft tracks would
-  need a second media upload to publish).
-- Translation wave (V5): opt-in `--upload-translations` with default
-  languages `zh-Hans,de` (DAF 2026-09); es/pt/fr/ja deferred.
-
-### 6. Worklist (`scripts/captions_worklist.py`)
-
-Read-only CSV planner ranking all 573 INDEX items by handoff priority
-(insights > top-by-views > fundamentals-2026 > rest), with per-part SRT
-availability (`srt_available`). View counts: `--fetch-views` pulls them via
-Data API `videos.list` (1 unit per 50 ids, read-only API key; handoff rule
-10 forbids yt-dlp) and caches them at `data/output/captions_views_cache.json`
-so repeat runs cost 0 units. Output feeds the upload script's `--worklist`;
-the upload script re-verifies every row live (skip-if-existing-track), so
-local files only pre-rank and never gate a write.

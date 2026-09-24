@@ -69,7 +69,7 @@ lint:
 	uv run ruff check src/ tests/ scripts/
 
 format:
-	uv run black src/ tests/
+	uv run ruff format src/ tests/
 	uv run ruff check --fix src/ tests/
 
 db-start:
@@ -148,3 +148,6 @@ journal-index:
 
 journal-check:
 	uv run python run.py journal-check --journal $(JOURNAL_DIR) --utilities . --manifest $(MANIFEST)
+
+yt-dryrun:
+	uv run python scripts/sync_youtube_metadata.py --dry-run $(if $(VIDEO),--video-id $(VIDEO),)
