@@ -28,6 +28,7 @@ Secrets come from env only; nothing is hardcoded or logged.
 from __future__ import annotations
 
 import logging
+import socket
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -160,6 +161,12 @@ class YouTubeClient:
         authorize writes). Writes require OAuth via ``client_secrets_path``
         (+ ``token_path`` to cache credentials) — scope ``youtube.force-ssl``.
         """
+        # httplib2 (googleapiclient's transport) has no per-request timeout; a
+        # dead connection otherwise stalls a batch run forever (observed on
+        # videos.update 2026-09-24). The global socket timeout bounds every
+        # request; reads and writes complete well inside it.
+        socket.setdefaulttimeout(120)
+
         from googleapiclient.discovery import build
 
         if self._api_key and not (self._client_secrets_path or self._token_path):
