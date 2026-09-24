@@ -26,8 +26,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from journal_utilities.ingest.enumerate import load_index_video_ids
-
 logger = logging.getLogger(__name__)
 
 
@@ -38,6 +36,8 @@ class Reconciliation:
     channel_ids: set[str] = field(default_factory=set)
     manifest_ids: set[str] = field(default_factory=set)
     index_ids: set[str] = field(default_factory=set)
+    # video_id -> item paths referencing it (duplicates = len > 1)
+    index_id_paths: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def in_channel_not_manifest(self) -> set[str]:
@@ -61,8 +61,23 @@ class Reconciliation:
         return self.index_ids - self.channel_ids
 
     @property
+    def duplicate_video_ids(self) -> dict[str, list[str]]:
+        """INDEX ids referenced by >1 canonical item (validate_journal errors).
+
+        Paths annotated ``[duplicate_of]`` are legitimate mirrors and don't
+        count; the raw lists stay in ``index_id_paths`` for the report.
+        """
+        return {
+            video_id: paths
+            for video_id, paths in self.index_id_paths.items()
+            if sum(1 for p in paths if "[duplicate_of]" not in p) > 1
+        }
+
+    @property
     def fully_reconciled(self) -> bool:
-        return self.channel_ids == self.manifest_ids == self.index_ids
+        return (
+            self.channel_ids == self.manifest_ids == self.index_ids and not self.duplicate_video_ids
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -77,12 +92,52 @@ class Reconciliation:
                 "index_not_channel": len(self.in_index_not_channel),
             },
             "reconciled": self.fully_reconciled,
+            "duplicate_video_ids": self.duplicate_video_ids,
             "channel_not_manifest": sorted(self.in_channel_not_manifest),
             "channel_not_index": sorted(self.in_channel_not_index),
             "manifest_not_channel": sorted(self.in_manifest_not_channel),
             "manifest_not_index": sorted(self.in_manifest_not_index),
             "index_not_channel": sorted(self.in_index_not_channel),
         }
+
+
+def load_index_item_paths(index_path: Path) -> dict[str, list[str]]:
+    """Map every INDEX video id to the item paths referencing it.
+
+    ``validate_journal`` errors on the same video id appearing in multiple
+    *canonical* items; per-talk uploads canonical via ``sessions[].video_id``
+    and ``duplicate_of`` mirrors are legitimate. Items carrying
+    ``duplicate_of`` are annotated in the path list rather than counted as
+    hard duplicates (the reconciled gate only fires on unannotated dupes).
+    """
+    try:
+        payload = json.loads(Path(index_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"Cannot read INDEX.json at {index_path}: {exc}") from exc
+    items = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        raise SystemExit(f"INDEX.json at {index_path} has no items list")
+    ids: dict[str, list[str]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_path = str(item.get("path", "<no-path>"))
+        parts = item.get("parts")
+        if not isinstance(parts, list):
+            continue
+        is_duplicate_of = bool(item.get("duplicate_of"))
+        for part in parts:
+            video_id = (
+                part
+                if isinstance(part, str)
+                else part.get("video_id")
+                if isinstance(part, dict)
+                else None
+            )
+            if isinstance(video_id, str) and video_id.strip():
+                entry = f"{item_path} [duplicate_of]" if is_duplicate_of else item_path
+                ids.setdefault(video_id, []).append(entry)
+    return ids
 
 
 def _ids_from_channel_source(payload: dict[str, Any]) -> set[str]:
@@ -137,12 +192,14 @@ def build_reconciliation(
     channel_ids: set[str],
     manifest_ids: set[str],
     index_ids: set[str],
+    index_id_paths: dict[str, list[str]] | None = None,
 ) -> Reconciliation:
     """Assemble the reconciliation from three id sets (pure, no I/O)."""
     return Reconciliation(
         channel_ids=set(channel_ids),
         manifest_ids=set(manifest_ids),
         index_ids=set(index_ids),
+        index_id_paths=index_id_paths or {},
     )
 
 
@@ -172,6 +229,11 @@ def render_text_report(recon: Reconciliation) -> str:
             lines.append(f"  {label} ({len(ids)}):")
             for video_id in ids:
                 lines.append(f"    {video_id}")
+    duplicates = data["duplicate_video_ids"]
+    if duplicates:
+        lines.append(f"INDEX duplicate video ids: {len(duplicates)}")
+        for video_id, paths in duplicates.items():
+            lines.append(f"    {video_id} -> {', '.join(paths)}")
     return "\n".join(lines)
 
 
@@ -205,7 +267,8 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    index_ids = load_index_video_ids(args.journal / "INDEX.json")
+    index_paths = load_index_item_paths(args.journal / "INDEX.json")
+    index_ids = set(index_paths)
     if not index_ids:
         raise SystemExit(
             f"No video ids could be read from {args.journal / 'INDEX.json'} — "
@@ -216,12 +279,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.channel_manifest is not None:
         channel_ids = load_channel_ids(args.channel_manifest)
         if not channel_ids:
-            logger.warning("No video ids found in %s", args.channel_manifest)
+            raise SystemExit(
+                f"No video ids could be read from {args.channel_manifest} — a broken "
+                "or wrong-shaped channel manifest would fake full reconciliation. "
+                "Check the path (expects channel_videos.json or a worklist JSON)."
+            )
 
     data_dir = args.data_dir or (args.journal / "data" / "output")
     manifest_ids = load_manifest_ids(data_dir)
 
-    recon = build_reconciliation(channel_ids, manifest_ids, index_ids)
+    recon = build_reconciliation(channel_ids, manifest_ids, index_ids, index_paths)
     print(render_text_report(recon))
 
     if args.output is not None:

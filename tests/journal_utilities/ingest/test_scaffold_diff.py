@@ -13,9 +13,11 @@ import pytest
 from journal_utilities.ingest.diff import (
     build_reconciliation,
     load_channel_ids,
+    load_index_item_paths,
     load_manifest_ids,
     render_text_report,
 )
+from journal_utilities.ingest.diff import main as diff_main
 from journal_utilities.ingest.enumerate import ChannelVideo
 from journal_utilities.ingest.scaffold import (
     build_scaffold,
@@ -227,3 +229,71 @@ def test_render_text_report_lists_gaps() -> None:
     assert "c1" in text
     assert "i1" in text
     assert "reconciled: False" in text
+
+
+def test_duplicate_index_video_ids_detected(journal: Path) -> None:
+    """Same video id in two INDEX items -> duplicate_video_ids, not reconciled."""
+    (journal / "INDEX.json").write_text(
+        json.dumps(
+            {
+                "items": [
+                    {"path": "data/video/x/A", "parts": ["dup1", "only_a"]},
+                    {"path": "data/video/x/B", "parts": ["dup1"]},
+                    # Legitimate mirror: carries duplicate_of like 34 real
+                    # INDEX rows; must not count as a hard duplicate.
+                    {
+                        "path": "data/video/x/C",
+                        "parts": ["dup1"],
+                        "duplicate_of": "data/video/x/A",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    paths = load_index_item_paths(journal / "INDEX.json")
+    recon = build_reconciliation({"dup1", "only_a"}, {"dup1", "only_a"}, {"dup1", "only_a"}, paths)
+    # x/C is annotated as a mirror; the A/B pair is the hard duplicate.
+    # duplicate_video_ids lists ALL paths (mirrors annotated) for the report;
+    # the reconciled gate fires because >1 canonical (unannotated) path exists.
+    assert recon.duplicate_video_ids == {
+        "dup1": [
+            "data/video/x/A",
+            "data/video/x/B",
+            "data/video/x/C [duplicate_of]",
+        ]
+    }
+    assert recon.fully_reconciled is False  # duplicates block reconciliation
+    assert "INDEX duplicate video ids: 1" in render_text_report(recon)
+    # to_dict carries the same annotated lists as the property.
+    assert recon.to_dict()["duplicate_video_ids"]["dup1"] == [
+        "data/video/x/A",
+        "data/video/x/B",
+        "data/video/x/C [duplicate_of]",
+    ]
+    # Raw paths keep the annotation for the report reader.
+    assert recon.index_id_paths["dup1"] == [
+        "data/video/x/A",
+        "data/video/x/B",
+        "data/video/x/C [duplicate_of]",
+    ]
+
+
+def test_diff_main_fatal_on_broken_manifest(tmp_path: Path) -> None:
+    """A typo'd --channel-manifest must exit fatal, not 'reconciled except everything'."""
+    journal = tmp_path / "journal"
+    journal.mkdir()
+    (journal / "INDEX.json").write_text(
+        json.dumps({"items": [{"path": "p", "parts": ["v1"]}]}), encoding="utf-8"
+    )
+    broken = tmp_path / "broken.json"
+    broken.write_text("not json", encoding="utf-8")
+    with pytest.raises(SystemExit, match="broken"):
+        diff_main(["--journal", str(journal), "--channel-manifest", str(broken)])
+
+
+def test_diff_main_fatal_on_unreadable_index(tmp_path: Path) -> None:
+    journal = tmp_path / "journal"
+    journal.mkdir()
+    with pytest.raises(SystemExit, match="Cannot read INDEX"):
+        diff_main(["--journal", str(journal), "--channel-manifest", str(tmp_path / "none.json")])
