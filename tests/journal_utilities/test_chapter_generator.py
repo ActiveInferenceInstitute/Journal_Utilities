@@ -96,7 +96,24 @@ def test_downsample_warning_logged(caplog):
     assert any("downsampling" in r.message.lower() or "90" in r.message for r in caplog.records)
 
 
-def test_under_10_chapters_kept_with_warning(caplog):
+def test_below_gate_minimum_kept_with_warning(caplog):
+    raw = "\n".join(
+        [
+            "00:00 Introduction",
+            "03:00 Topic One",
+        ]
+    )
+    with caplog.at_level(logging.WARNING, logger="journal_utilities.youtube.chapter_generator"):
+        chapters = parse_llm_chapters_text(raw)
+    # Under-count sets are kept, not dropped (the gate judges them separately).
+    assert len(chapters) == 2
+    assert chapters[0].start == 0.0
+    assert any(
+        "chapters" in r.message and any(ch.isdigit() for ch in r.message) for r in caplog.records
+    )
+
+
+def test_at_gate_minimum_no_warning(caplog):
     raw = "\n".join(
         [
             "00:00 Introduction",
@@ -106,10 +123,8 @@ def test_under_10_chapters_kept_with_warning(caplog):
     )
     with caplog.at_level(logging.WARNING, logger="journal_utilities.youtube.chapter_generator"):
         chapters = parse_llm_chapters_text(raw)
-    # Under-count sets are kept, not dropped.
-    assert len(chapters) >= 3
-    assert chapters[0].start == 0.0
-    assert any("chapters" in r.message and any(ch.isdigit() for ch in r.message) for r in caplog.records)
+    assert len(chapters) == 3
+    assert not caplog.records
 
 
 def test_in_range_chapter_count_unchanged_no_warning(caplog):
@@ -120,8 +135,10 @@ def test_in_range_chapter_count_unchanged_no_warning(caplog):
     assert not caplog.records
 
 
-def test_calculate_optimal_chapter_count_respects_ten_thirty_floor():
+def test_calculate_optimal_chapter_count_respects_gate_floor():
     durations = [60.0, 300.0, 600.0, 1199.0, 1200.0, 2700.0, 5400.0, 7200.0, 14400.0, None]
     for d in durations:
         count = calculate_optimal_chapter_count(d)
-        assert 10 <= count <= 30, f"duration={d} produced out-of-contract count {count}"
+        # Videos under 5 minutes legitimately get 3 chapters; everything else 10-30.
+        expected_floor = 3 if (d is not None and d < 300.0) else 10
+        assert expected_floor <= count <= 30, f"duration={d} produced out-of-contract count {count}"
