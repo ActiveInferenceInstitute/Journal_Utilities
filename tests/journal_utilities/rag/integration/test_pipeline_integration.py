@@ -14,6 +14,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+# Requires the rag extra; skip cleanly when it is not installed.
+pytest.importorskip("structlog")
+pytest.importorskip("cohere")
+pytest.importorskip("surrealdb")
+
 from journal_utilities.rag.main import JournalRAGPipeline
 from journal_utilities.rag.models import Transcript
 from journal_utilities.rag.settings import settings

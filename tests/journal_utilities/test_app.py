@@ -9,6 +9,9 @@ import json
 from pathlib import Path
 
 import pytest
+
+# Requires the interface extra; skip cleanly when it is not installed.
+pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from journal_utilities.interface.app import create_app

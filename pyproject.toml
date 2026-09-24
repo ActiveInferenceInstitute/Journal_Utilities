@@ -12,29 +12,27 @@ authors = [
 ]
 
 dependencies = [
-    # Transcription pipeline (includes PyTorch with CUDA 12.8 support)
-    "whisperx @ git+https://github.com/m-bain/whisperX.git",
-    "yt-dlp>=2025.9.26",
-    "numpy>=2.0.2",
-    "pandas>=2.2.3",
-    "omegaconf>=2.3.0",
-    "pyytdata>=0.1.0",
-    # Entity extraction (JournalRAG)
-    "cohere>=5.11.0",
+    # Pipeline core — light install; heavy deps live in the extras below
     "pydantic>=2.6.0",
     "pydantic-settings>=2.1.0",
-    "structlog>=25.5.0",
-    "rich>=14.2.0",
-    # Shared dependencies
     "python-dotenv>=1.0.0",
-    "surrealdb>=1.0.6",
-    # YouTube channel download
+    "pyytdata>=0.1.0",
+    "requests>=2.32.0",
+    "yt-dlp>=2025.9.26",
     "youtube-transcript-api>=0.6.0",
-    "google-api-python-client>=2.186.0",
-    "google-auth-oauthlib>=1.4.0",
 ]
 
 [project.optional-dependencies]
+# WhisperX (torch + diarization) — the heavy GPU transcription stack
+transcribe = [
+    "whisperx @ git+https://github.com/m-bain/whisperX.git",
+]
+# Entity extraction / JournalRAG
+rag = [
+    "cohere>=5.11.0",
+    "structlog>=25.5.0",
+    "surrealdb>=1.0.6",
+]
 transcribe-local = [
     "mlx-whisper>=0.4.0",
 ]
@@ -45,15 +43,6 @@ interface = [
 ]
 export = [
     "fpdf2>=2.8.0",
-]
-dev = [
-    "pytest>=8.4.2",
-    "pytest-asyncio>=1.2.0",
-    "pytest-cov>=7.0.0",
-    "black>=25.9.0",
-    "ruff>=0.2.0",
-    "mypy>=1.8.0",
-    "ipython>=9.6.0",
 ]
 
 [project.scripts]
@@ -71,12 +60,13 @@ packages = ["src/journal_utilities"]
 
 [dependency-groups]
 dev = [
-    "ipython>=9.5.0",
+    "ipython>=9.6.0",
+    "mypy>=1.8.0",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.2.0",
 ]
-
-[tool.black]
-line-length = 100
-target-version = ["py312"]
 
 [tool.ruff]
 line-length = 100

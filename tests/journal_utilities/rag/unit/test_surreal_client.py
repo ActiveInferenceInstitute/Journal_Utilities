@@ -7,6 +7,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+# Requires the rag extra; skip cleanly when it is not installed.
+pytest.importorskip("surrealdb")
+pytest.importorskip("structlog")
+
 from journal_utilities.rag.graph.surreal_client import SurrealDBClient
 from journal_utilities.rag.models import Entity, Relationship, Transcript
 

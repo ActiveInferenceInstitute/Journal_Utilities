@@ -10,6 +10,9 @@ from pathlib import Path
 
 import pytest
 
+# Requires the interface extra; skip cleanly when it is not installed.
+pytest.importorskip("fastapi")
+
 from journal_utilities.interface.data_loader import (
     DataLoader,
     SearchIndex,

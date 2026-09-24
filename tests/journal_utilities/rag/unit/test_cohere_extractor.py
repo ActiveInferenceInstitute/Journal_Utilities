@@ -7,6 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Requires the rag extra; skip cleanly when it is not installed.
+pytest.importorskip("cohere")
+
 from journal_utilities.rag.extractors.cohere_extractor import CohereExtractor
 from journal_utilities.rag.models.entities import CoreEntities, DetailedAnalysis
 

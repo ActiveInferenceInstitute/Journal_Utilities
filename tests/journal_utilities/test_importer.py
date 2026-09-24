@@ -8,6 +8,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+# Requires the rag extra; skip cleanly when it is not installed.
+pytest.importorskip("surrealdb")
+
 from journal_utilities.data.importer import insert_missing_sessions_from_json
 
 

@@ -1,7 +1,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
+
+pytest.importorskip("httpx")  # Requires the interface extra
+import httpx
 
 from journal_utilities.interface.chat_engine import ChatEngine
 
