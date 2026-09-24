@@ -239,6 +239,17 @@ def sync_videos(ctx: SyncContext, targets: list[dict]) -> int:
             "APPLY" if ctx.apply else "dry-run",
         )
 
+        # -------------------------------------------- 2b. IDEMPOTENCY GUARD
+        # Skip the 50-unit videos.update when the live snippet already
+        # matches the plan; the 1-unit read above already happened (Rule 1).
+        if (
+            snippet.title == raw_title
+            and snippet.description == raw_desc
+            and list(snippet.tags) == list(existing_tags)
+        ):
+            logger.info("[%d/%d] %s — no change, skipping write", i, len(targets), vid)
+            continue
+
         if not ctx.apply:
             print(f"=================== DRY RUN PREVIEW: {vid} ===================")
             print(f"Title: {snippet.title}")

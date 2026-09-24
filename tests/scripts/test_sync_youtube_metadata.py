@@ -131,6 +131,23 @@ def test_apply_writes_only_after_api_fetch_and_backup(tmp_path):
     assert payload["snippet"]["description"] == "Live description with abstract and credits."
 
 
+def test_idempotent_run_skips_write(tmp_path, caplog, monkeypatch):
+    """A video whose live snippet already matches the plan costs 1 read, not
+    a 50-unit videos.update."""
+    import scripts.sync_youtube_metadata as sync_mod
+
+    client = FakeClient(snippets={"vid_known": FakeSnippet("vid_known", tags=["a", "b"])})
+    ctx = make_context(tmp_path, client, INDEX_ITEMS, apply=True)
+    monkeypatch.setattr(sync_mod, "build_target_description", lambda vid, raw, c: raw)
+    monkeypatch.setattr(sync_mod, "derive_video_tags", lambda title, tags: list(tags))
+    with caplog.at_level(logging.INFO):
+        updated = sync_videos(ctx, [{"id": "vid_known"}])
+    assert updated == 0
+    assert client.update_calls == 0
+    assert "no change, skipping write" in caplog.text
+    assert not (tmp_path / "backup" / "vid_known").exists()
+
+
 def test_dry_run_default_never_writes(tmp_path):
     client = FakeClient(snippets={"vid_known": FakeSnippet("vid_known")})
     ctx = make_context(tmp_path, client, INDEX_ITEMS, apply=False)
