@@ -97,20 +97,18 @@ def _classify(video: ChannelVideo) -> tuple[str | None, str | None, str | None]:
 def _infer_series_and_item(
     video: ChannelVideo,
 ) -> tuple[str, str, str | None, str | None]:
-    """Derive (series, item, category, episode) folder names for a video.
+    """Derive (series_dir, item, category, episode) for a video.
 
-    Falls back to a dateless slug item under ``Other`` when no stream pattern
-    matches — mirrors the journal's existing "Other" series convention.
+    The categorizer's ``category`` is the journal-relative directory:
+    nested for textbooks ("TextbookGroup/Namjoshi2026/Cohort_1") and a bare
+    folder for streams ("GuestStream"). INDEX confirms ``series`` is always
+    the first path segment (573/573 rows), so
+    ``relative_dir = SRC_PREFIX / category / series`` reproduces the real
+    tree for both shapes. No category match -> dateless slug under ``Other``
+    (the journal's 49-item Other series).
     """
     category, series, episode = _classify(video)
     if series:
-        # Numbered streams: series dir is the bare category ("GuestStream"),
-        # item is the counter name ("GuestStream_141") — matches INDEX rows.
-        # Textbook categories carry a slash root ("TextbookGroup/Namjoshi2026/
-        # Cohort_1"); the series dir collapses it to a single folder segment.
-        if category and "/" in category:
-            root = category.rsplit("/", 1)[0].replace("/", "_")
-            return root, series, category, episode
         return category or "Other", series, category, episode
     return "Other", _part_slug(video.title), category, episode
 
@@ -160,11 +158,11 @@ def build_scaffold(
         part["duration"] = video.duration_seconds
 
     scaffold: dict[str, Any] = {
-        "series": series,
+        "series": series.split("/")[0],
         "item": item,
         "source": "youtube",
         "channel": "ActiveInferenceInstitute",
-        "category": category or series.split("_")[0],
+        "category": category or series.split("/")[0],
         "title": video.title,
         "status": "scheduled" if video.is_scheduled else "published",
         "transcript_kind": "youtube",

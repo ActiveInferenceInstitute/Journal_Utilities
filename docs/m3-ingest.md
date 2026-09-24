@@ -18,8 +18,14 @@ written behind `--no-dry-run`):
    (`items[].parts[]` video ids) to emit the **new-video worklist**.
 2. **Scaffold** — per-item `metadata.json` scaffolds for worklist entries:
    `transcript_kind: "youtube"` placeholders, `status: "scheduled"` for
-   premieres (liveBroadcastContent=upcoming or uploadStatus=unpublished),
-   series/item naming via the shared categorizer so folders match INDEX rows.
+   premieres (liveBroadcastContent=upcoming or uploadStatus=unpublished).
+   Naming via the shared categorizer reproduces the journal tree exactly:
+   streams → `data/video/activeinferenceinstitute/<Category>/<Category>_NNN`
+   (e.g. `GuestStream/GuestStream_141`), textbook sessions → the nested
+   `TextbookGroup/<Book>/Cohort_N/<Session|Meeting>_NNN` (the categorizer's
+   `category` is that full nested dir), unmatched titles → the existing
+   `Other/<slug>` series. Existing items are never overwritten; canonical
+   episode numbers are never renumbered.
 3. **Diff** — channel-vs-manifest-vs-INDEX reconciliation report
    (quota-free; consumes a saved channel manifest or worklist JSON).
 
@@ -100,5 +106,5 @@ Unit tests inject a fake Data API service (same pattern as
 `tests/youtube/test_client.py`) — no network, no key:
 
 ```bash
-uv run --no-sync pytest tests/ingest -q
+uv run --no-sync pytest tests/journal_utilities/ingest -q
 ```

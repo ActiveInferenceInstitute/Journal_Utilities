@@ -88,11 +88,34 @@ def test_plan_scaffolds_matches_index_naming(tmp_path: Path) -> None:
         "data/video/activeinferenceinstitute/Insights/Insights_025"
     )
     textbook = by_video["t1"]
+    # Real journal layout: nested TextbookGroup/<Book>/Cohort_N/<item>;
+    # INDEX has zero flattened TextbookGroup_* dirs.
     assert textbook.relative_dir.as_posix() == (
-        "data/video/activeinferenceinstitute/TextbookGroup_ParrPezzuloFriston2022/Meeting_012"
+        "data/video/activeinferenceinstitute/"
+        "TextbookGroup/ParrPezzuloFriston2022/Cohort_5/Meeting_012"
     )
+    assert textbook.metadata["series"] == "TextbookGroup"
+    assert textbook.metadata["category"] == "TextbookGroup/ParrPezzuloFriston2022/Cohort_5"
     assert by_video["u1"].relative_dir.as_posix() == (
         "data/video/activeinferenceinstitute/Other/completely-unstructured-seminar-title"
+    )
+
+
+def test_no_scaffold_ever_lands_in_flattened_textbook_dir(tmp_path: Path) -> None:
+    """Regression: scaffolds must not mint flattened TextbookGroup_* dirs."""
+    videos = [
+        ChannelVideo(video_id="t1", title="ActInf Textbook Group ~ Cohort 5 ~ Meeting 12"),
+        ChannelVideo(video_id="t2", title="Fundamentals of Active Inference ~ Session 9"),
+        ChannelVideo(video_id="t3", title="ActInf Textbook Group ~ Cohort 1 ~ Session 8"),
+    ]
+    for plan in plan_scaffolds(videos, tmp_path):
+        first_segment = plan.relative_dir.parts[3]
+        assert first_segment == "TextbookGroup", plan.relative_dir
+    namjoshi = [
+        p for p in plan_scaffolds(videos, tmp_path) if p.metadata["parts"][0]["video_id"] == "t2"
+    ][0]
+    assert namjoshi.relative_dir.as_posix() == (
+        "data/video/activeinferenceinstitute/TextbookGroup/Namjoshi2026/Cohort_1/Session_009"
     )
 
 
