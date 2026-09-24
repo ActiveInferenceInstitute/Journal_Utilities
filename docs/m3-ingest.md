@@ -99,6 +99,15 @@ Notes for the workflow author:
 - The vendored client (`journal_utilities.youtube.client`) enforces
   per-call quota accounting; this module adds ~32 units/run. Schedule away
   from other Data API jobs on the same key.
+- `ingest.diff` flags video ids referenced by more than one canonical INDEX
+  item and blocks reconciliation; items carrying `duplicate_of` (legitimate
+  mirrors, e.g. per-talk uploads also listed under `Other/`) are annotated
+  and exempt.
+- Known upstream quirk (pre-existing, not this module):
+  `journal_utilities.youtube.categorizer`'s YOUTUBE_TITLE `textbookgroup`
+  pattern routes "ActInf Textbook Group ~ Cohort N ~ Session M" titles into
+  `ParrPezzuloFriston2022/Cohort_N/Meeting_00M`. Worth fixing upstream in
+  the categorizer; flagged here for the journal-infra agent.
 
 ## Testing
 
