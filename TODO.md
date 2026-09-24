@@ -391,3 +391,40 @@ channel manifest from `data/output/channel_videos_all.json.bak`, spot-check
 2–3 live, and close this ledger entry. If the 10× quota extension is granted,
 the deferred 84-video backlog from the original audit can run in the same
 window.
+
+
+## M4 — static per-item pages, sitemap.xml, robots.txt (2026-09-24, site wave)
+
+**Implemented this cycle** (spec: ActiveInferenceJournal
+`docs/m4-site-spec.md`):
+- `site/pages_site.py`: one crawlable `/item/<series>/<item>/index.html` per
+  INDEX item — server-rendered title/guests/date/summary, per-part
+  YouTube-nocookie embeds, provenance-gated chapters as `?t=` jump links,
+  full transcript text (part-tagged), VideoObject + hasPart Clip + Dataset
+  JSON-LD, canonical/OG/Twitter head tags, breadcrumb + prev/next + SPA links.
+- `site/sitemap.py`: urlset with root + one `<url>` per item; `<lastmod>`
+  strictly from `parts[].upload_date`, omitted when unknown (never
+  fabricated); no `changefreq`/`priority`. `robots.txt` references the
+  sitemap.
+- `site/builder.py`: `build_site(..., static_pages=True)` bakes pages +
+  sitemap + robots and fails the build on any pages/sitemap ↔ processed-item
+  count mismatch; per-item language lists ride the I4 case-insensitive
+  translation discovery with M2 normalization (`chi` → `zh-Hans`, …).
+- `scripts/build_pages_site.py`: CLI with dry-run default, `--apply`,
+  `--check` drift gate.
+- Tests: `tests/site/test_pages_site.py` + `test_sitemap.py` and M4 additions
+  to `tests/journal_utilities/test_site_builder.py` (no-mock synthetic trees:
+  per-item bundle, JSON-LD shape, sitemap entries, per-item language
+  coverage).
+
+**Evidence:** `uv run pytest tests/journal_utilities/test_site_builder.py
+tests/site -q` → 23 passed, 1 skipped (case-insensitive-filesystem dedupe
+skip, runs in CI). Real-tree smoke build against the journal worktree:
+`uv run python scripts/build_pages_site.py --journal
+<ActiveInferenceJournal worktree> --output /tmp/m4-smoke-site --apply` →
+573 items, 573 item pages; sitemap.xml 574 `<loc>` (root + 573 items, 0
+`<lastmod>` — this tree's `metadata.json` parts carry no `upload_date`, so
+omitted per the no-fabrication rule); robots.txt matches the spec exactly;
+sample page canonical, transcript paragraphs, and JSON-LD (Dataset +
+VideoObject per part) verified. Manifest language coverage on this tree:
+139/573 items with ≥1 translation (post-I4 dual-spelling discovery).
