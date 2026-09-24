@@ -3,6 +3,7 @@
 from journal_utilities.youtube.metadata_formatter import (
     ChapterEntry,
     assemble_video_description,
+    build_journal_item_url,
     split_base_description,
 )
 
@@ -32,14 +33,15 @@ Active Inference Livestreams: https://coda.io/@active-inference-institute/livest
         ChapterEntry(185.0, "The Epistemic Arc"),
     ]
 
+    item_path = "data/video/activeinferenceinstitute/Insights/Insights_001"
     assembled = assemble_video_description(
         base_description=raw_desc,
         chapters=chapters,
-        video_id="q_fAglCMvPw",
+        github_transcript_url=build_journal_item_url(item_path),
     )
 
     # 1. Verify paper information is at the top
-    assert assembled.startswith("\"Order and change in art")
+    assert assembled.startswith('"Order and change in art')
     assert "https://doi.org/10.1098/rstb.2022.0411" in assembled
 
     # 2. Verify timestamps are positioned between abstract and links
@@ -52,5 +54,10 @@ Active Inference Livestreams: https://coda.io/@active-inference-institute/livest
 
     assert abstract_pos < chapters_pos < resources_pos < links_pos
 
-    # 3. Verify GitHub transcript link
-    assert "https://github.com/ActiveInferenceInstitute/ActiveInferenceJournal/blob/main/transcripts/q_fAglCMvPw.md" in assembled
+    # 3. Verify journal transcript link resolves to the item tree, not the dead
+    #    blob/main/transcripts/<id>.md path (Y1/E1/I1 regression lock).
+    assert (
+        "https://github.com/ActiveInferenceInstitute/ActiveInferenceJournal/tree/main/" + item_path
+        in assembled
+    )
+    assert "blob/main/transcripts" not in assembled
