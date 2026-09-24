@@ -47,7 +47,9 @@ for local use; it has no public endpoint.
 ## Data retention
 
 - Journal content (metadata, transcripts, captions, translations) is retained indefinitely as a **CC-BY-4.0** public research corpus, with per-file provenance (`previous_paths`, `{source, model, generated_at}`) recorded in `metadata.json`.
-- Machine-local working files (`data/output/*.json`, `yt_backup/`, logs) are untracked, reproducible, and can be deleted at any time without harming the journal.
+- Machine-local working files (`data/output/*.json`, `yt_backup/`, logs) are
+reproducible intermediate state and are never published; they can be deleted at
+any time without harming the journal.
 
 ## Changes
 
