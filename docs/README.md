@@ -9,7 +9,6 @@ module- and workflow-level guides.
 
 | Doc | Covers |
 | --- | --- |
-| [`youtube.md`](youtube.md) | Channel enumeration (`youtube/channel.py`) — unions videos+streams+shorts tabs. |
 | [`youtube_download.md`](youtube_download.md) | Downloading transcripts/audio/video via `yt-dlp` (`download/downloader.py`). |
 | [`transcription.md`](transcription.md) | Local Whisper (`mlx-whisper`) and WhisperX transcription. |
 | [`data.md`](data.md) | Data layout, manifests, and the SurrealDB store. |
@@ -20,6 +19,9 @@ module- and workflow-level guides.
 | [`chat_engine.md`](chat_engine.md) | Ollama-powered RAG chat over transcripts. |
 | [`translation.md`](translation.md) | Hosted OpenRouter subtitle translation (`scripts/translate_subtitles_openrouter.py`). |
 | [`configuration.md`](configuration.md) | `config.ini` + `.env` reference. |
+| [`youtube.md`](youtube.md) | YouTube integration — enumeration (`youtube/channel.py`), guarded write path, quota rules, OAuth ownership. |
+| [`m3-ingest.md`](m3-ingest.md) | Weekly channel enumeration / scaffold / reconciliation (M3). |
+| [`privacy.md`](privacy.md) | What the pipeline processes, what it never does, API usage, retention. |
 
 ## Journal refactor
 
