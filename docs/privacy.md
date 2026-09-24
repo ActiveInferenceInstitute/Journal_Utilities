@@ -37,7 +37,12 @@ Public names of **speakers, guests, and Institute staff** appear in transcripts 
 
 ## Local operator privacy
 
-The repo's `.env` (API keys, OAuth tokens, service-account material) is gitignored and excluded from the secret baseline. Generated bulk artifacts under `data/output/` are untracked and never published; only curated journal content reaches the public site. The experimental RAG/chat stack (`rag` extra) binds to `127.0.0.1` and is intended for local use; it has no public endpoint.
+The repo's `.env` and the cached OAuth token file (`.youtube_token.json`) are
+gitignored and excluded from the secret baseline — never committed, never
+published. Generated bulk artifacts under `data/output/` are working state and
+never published; only curated journal content reaches the public site. The
+experimental RAG/chat stack (`rag` extra) binds to `127.0.0.1` and is intended
+for local use; it has no public endpoint.
 
 ## Data retention
 

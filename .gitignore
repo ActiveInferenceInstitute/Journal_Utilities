@@ -5,6 +5,7 @@ __pycache__/
 2_audio_to_markdown/authkey.txt
 venv
 .env
+.youtube_token.json
 history.txt
 
 log.txt
