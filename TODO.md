@@ -385,12 +385,16 @@ link. The transcripts moved into the journal data tree; the blob URLs 404.
   Institute's own public content; writes are OAuth `youtube.force-ssl` under
   `admin@activeinference.institute`).
 
-**Follow-up:** complete the final 113 (manifest rebuilt from PASSED-log
-evidence, first id `wDYI7pOGamI`); after full 284/284, restore the full
-channel manifest from `data/output/channel_videos_all.json.bak`, spot-check
-2–3 live, and close this ledger entry. If the 10× quota extension is granted,
-the deferred 84-video backlog from the original audit can run in the same
-window.
+**CLOSED 2026-09-25 — 284/284 live-fixed.** The post-reset run (00:02 PT,
+persistent service over the 113-entry evidence-built manifest) finished with
+zero errors: 110 write-verified PASSED, 3 correctly skipped as no-change by
+the idempotency guard (`wDYI7pOGamI` — its batch1 write had in fact completed
+server-side despite the transport hang — plus `ElKVfCJrIHM`, `kXw1CPRkJCw`);
+all 3 live-confirmed via API (dead link absent, `tree/main/data/video/...`
+link present). Full channel manifest restored from
+`data/output/channel_videos_all.json.bak` (735 videos). Quota spent well
+inside the default 10k/day. The deferred 84-video backlog from the original
+audit remains owner-scheduled pending the 10× quota extension decision.
 
 
 ## M4 — static per-item pages, sitemap.xml, robots.txt (2026-09-24, site wave)
