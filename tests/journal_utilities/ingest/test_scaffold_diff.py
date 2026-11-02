@@ -42,6 +42,8 @@ def test_build_scaffold_schema_fields() -> None:
         title="ActInf GuestStream #141.1 ~ Test Talk",
         published_at="2026-09-20T10:00:00Z",
         duration_seconds=3600,
+        privacy_status="public",
+        broadcast_status="none",
     )
     scaffold = build_scaffold(video, "GuestStream", "GuestStream_141", "GuestStream", "1")
     # Core keys per journal docs/SCHEMA.md; ingest additions: status + transcript_kind.
@@ -64,10 +66,18 @@ def test_build_scaffold_schema_fields() -> None:
 def test_scaffold_scheduled_status_for_premieres() -> None:
     upcoming = ChannelVideo(video_id="p1", title="Talk", broadcast_status="upcoming")
     unpublished = ChannelVideo(video_id="p2", title="Talk", upload_status="unpublished")
-    normal = ChannelVideo(video_id="p3", title="Talk")
+    normal = ChannelVideo(
+        video_id="p3", title="Talk", privacy_status="public", broadcast_status="none"
+    )
     assert build_scaffold(upcoming, "Livestream", "Livestream_100")["status"] == "scheduled"
     assert build_scaffold(unpublished, "Livestream", "Livestream_101")["status"] == "scheduled"
     assert build_scaffold(normal, "Livestream", "Livestream_102")["status"] == "published"
+
+
+def test_scaffold_status_is_unknown_without_evidence() -> None:
+    """No status evidence (e.g. an unresolved yt-dlp delta) -> 'unknown'."""
+    unresolved = ChannelVideo(video_id="p4", title="Talk")
+    assert build_scaffold(unresolved, "Livestream", "Livestream_103")["status"] == "unknown"
 
 
 def test_plan_scaffolds_matches_index_naming(tmp_path: Path) -> None:
@@ -215,11 +225,20 @@ def test_load_channel_ids_accepts_manifest_and_worklist(tmp_path: Path) -> None:
 
 def test_load_manifest_ids_ignores_simple_files(journal: Path) -> None:
     out = journal / "data" / "output"
-    (out / "aaa.json").write_text("{}", encoding="utf-8")
-    (out / "aaa.simple.json").write_text("{}", encoding="utf-8")
-    (out / "bbb.simple.json").write_text("{}", encoding="utf-8")
-    assert load_manifest_ids(out) == {"aaa"}
+    (out / "aaaaaaaaaaa.json").write_text("{}", encoding="utf-8")
+    (out / "aaaaaaaaaaa.simple.json").write_text("{}", encoding="utf-8")
+    (out / "bbbbbbbbbbb.simple.json").write_text("{}", encoding="utf-8")
+    assert load_manifest_ids(out) == {"aaaaaaaaaaa"}
     assert load_manifest_ids(journal / "missing-dir") == set()
+
+
+def test_load_manifest_ids_ignores_non_video_files(journal: Path) -> None:
+    """Aggregates/config files share data/output/ and are not videos."""
+    out = journal / "data" / "output"
+    (out / "aaaaaaaaaaa.json").write_text("{}", encoding="utf-8")
+    for name in ("channel_videos.json", "download_manifest.json", "README.json", "notes.md"):
+        (out / name).write_text("{}", encoding="utf-8")
+    assert load_manifest_ids(out) == {"aaaaaaaaaaa"}
 
 
 def test_render_text_report_lists_gaps() -> None:
