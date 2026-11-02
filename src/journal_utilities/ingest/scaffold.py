@@ -164,7 +164,7 @@ def build_scaffold(
         "channel": "ActiveInferenceInstitute",
         "category": category or series.split("/")[0],
         "title": video.title,
-        "status": "scheduled" if video.is_scheduled else "published",
+        "status": video.publication_state,
         "transcript_kind": "youtube",
         "parts": [part],
     }

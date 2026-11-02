@@ -44,6 +44,15 @@ _ISO_DURATION_RE = re.compile(
     r"^P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?$"
 )
 
+#: Recorded whenever the source cannot determine a value — never guessed at.
+UNKNOWN = "unknown"
+
+#: Privacy values that are positive availability evidence of publication.
+_PUBLISHED_PRIVACY = frozenset({"public", "unlisted"})
+
+#: Broadcast states that are positive evidence of publication (not upcoming).
+_PUBLISHED_BROADCAST = frozenset({"none", "live"})
+
 
 def parse_iso8601_duration(value: str) -> int | None:
     """Parse an ISO-8601 duration (``PT1H2M3S``) into whole seconds.
@@ -90,6 +99,25 @@ class ChannelVideo:
         return self.broadcast_status == "upcoming" or self.upload_status == "unpublished"
 
     @property
+    def publication_state(self) -> str:
+        """``scheduled`` | ``published`` | ``unknown`` — evidence only, never guessed.
+
+        ``scheduled`` requires premiere evidence, ``published`` requires
+        availability evidence (privacy public/unlisted) plus a broadcast state
+        that is explicitly not upcoming, and everything else is ``unknown``. A
+        field recorded as ``"unknown"`` (e.g. a failed full extraction on the
+        yt-dlp path) can therefore never yield ``published``.
+        """
+        if self.is_scheduled:
+            return "scheduled"
+        if (
+            self.privacy_status in _PUBLISHED_PRIVACY
+            and self.broadcast_status in _PUBLISHED_BROADCAST
+        ):
+            return "published"
+        return UNKNOWN
+
+    @property
     def url(self) -> str:
         return f"https://www.youtube.com/watch?v={self.video_id}"
 
@@ -97,6 +125,7 @@ class ChannelVideo:
         data: dict[str, Any] = asdict(self)
         data["published_date"] = self.published_date
         data["is_scheduled"] = self.is_scheduled
+        data["publication_state"] = self.publication_state
         data["url"] = self.url
         return data
 

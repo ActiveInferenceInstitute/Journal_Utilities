@@ -33,7 +33,7 @@ credentials from it. Secrets come from env (`YOUTUBE_API_KEY`,
 | `src/journal_utilities/youtube/client.py` | Vendored minimal Data API client (`videos.list/update`, `captions.list/insert`, `playlists.*`, `playlistItems.*`). API key = read-only; OAuth only needed for writes. Unit-tested against fake services. All requests bounded by a 120 s socket timeout (set in `_build_service()`), so a dead connection can no longer stall a `videos.update` indefinitely. |
 | `scripts/sync_youtube_metadata.py` | Description/metadata sync with Rule-1 guard, backups, quota budget, `--dry-run` default. Replaces the dead `/blob/main/transcripts/` link with the resolving `tree/main/data/video/.../<item>` journal URL while preserving abstract, chapters, and tags. Idempotency guard: when the live snippet already equals the planned state it skips the 50-unit `videos.update` (1 list unit instead; regression test `test_idempotent_run_skips_write`). |
 | `scripts/live_batch.sh` | Batch driver, repo-relative paths, quota-safe defaults. |
-| `src/journal_utilities/ingest/` | Weekly channel enumeration / scaffold / reconciliation (M3) — read-only, ~32 quota units per run. |
+| `src/journal_utilities/ingest/` | Weekly channel enumeration / scaffold / reconciliation (M3) — read-only. The weekly workflow is **secret-free** (`yt-dlp` flat pass + delta full extractions; no key, no quota); the Data API path (~32 units/run) remains the manual alternative. |
 | `scripts/upload_captions.py` | Caption uploads (M5): skips existing non-ASR tracks, prefers WhisperX-derived SRTs, quota-scheduled (~24/day). First-wave translation targets: `zh-Hans`, `de`. |
 
 ## Local checks

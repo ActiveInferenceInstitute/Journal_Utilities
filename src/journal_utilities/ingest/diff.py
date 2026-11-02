@@ -171,12 +171,25 @@ def load_channel_ids(path: Path) -> set[str]:
     return _ids_from_channel_source(payload)
 
 
+def _is_video_id(value: str) -> bool:
+    """YouTube ids are exactly 11 chars of ``[A-Za-z0-9_-]``.
+
+    Filters the config/aggregate files that share the downloader's output
+    directory (``channel_videos.json``, ``download_manifest.json``, …) so they
+    are not mistaken for per-video manifests.
+    """
+    return len(value) == 11 and all(
+        character.isascii() and (character.isalnum() or character in "-_") for character in value
+    )
+
+
 def load_manifest_ids(data_dir: Path) -> set[str]:
     """Collect video ids from per-video download manifests in ``data_dir``.
 
     A video counts as present when ``<id>.json`` exists (the downloader's
     full-metadata artifact); ``.simple.json`` companions are ignored because
-    they always accompany the full file.
+    they always accompany the full file, and files whose stem is not shaped
+    like a video id are skipped.
     """
     root = Path(data_dir)
     if not root.is_dir():
@@ -184,7 +197,7 @@ def load_manifest_ids(data_dir: Path) -> set[str]:
     return {
         path.name[: -len(".json")]
         for path in root.glob("*.json")
-        if not path.name.endswith(".simple.json")
+        if not path.name.endswith(".simple.json") and _is_video_id(path.name[: -len(".json")])
     }
 
 
