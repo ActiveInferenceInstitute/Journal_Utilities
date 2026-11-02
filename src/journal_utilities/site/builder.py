@@ -20,6 +20,7 @@ from typing import Any
 
 from journal_utilities.site.pages_site import (
     BASE_URL,
+    item_slug,
     plan_item_pages,
     plan_sitemap_urls,
     write_item_pages,
@@ -104,8 +105,13 @@ def translation_lang_key(srt_file: Path) -> str | None:
     return tag
 
 
-def build_item_payload(item_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
-    """Extract and structure full interactive data for a single journal item."""
+def build_item_payload(item_dir: Path, meta: dict[str, Any], slug: str) -> dict[str, Any]:
+    """Extract and structure full interactive data for a single journal item.
+
+    ``slug`` is the canonical INDEX-path key (``pages_site.item_slug``). Flat
+    ``(series, item)`` pairs are not unique across the journal tree, so the
+    slug — not ``series/item`` — is the payload's identity.
+    """
     series = meta.get("series", "")
     item_id = meta.get("item", "")
     title = meta.get("title") or item_id
@@ -121,7 +127,7 @@ def build_item_payload(item_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
     sessions = meta.get("sessions", [])
 
     payload: dict[str, Any] = {
-        "id": f"{series}/{item_id}",
+        "id": slug,
         "series": series,
         "item": item_id,
         "title": title,
@@ -212,23 +218,32 @@ def build_site(
     data_dir = output_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest_items: list[dict[str, Any]] = []
-    processed_count = 0
-    processed_entries: list[tuple[str, dict[str, Any]]] = []
-
+    # Read every INDEX entry first: the canonical item key must be unique, and
+    # a duplicate has to fail before any payload file is written.
+    prepared: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
+    slugs: dict[str, str] = {}
     for it in items:
         path_str = it.get("path", "")
-        item_path = journal_dir / path_str
-        meta_path = item_path / "metadata.json"
+        meta_path = journal_dir / path_str / "metadata.json"
         if not meta_path.exists():
             continue
-
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
         except Exception as e:
             logger.warning("Skipping malformed metadata %s: %s", meta_path, e)
             continue
+        slug = item_slug(path_str)
+        if slug in slugs:
+            raise RuntimeError(f"duplicate item key {slug!r}: {slugs[slug]} and {path_str}")
+        slugs[slug] = path_str
+        prepared.append((path_str, meta, it))
 
+    manifest_items: list[dict[str, Any]] = []
+    processed_entries: list[tuple[str, dict[str, Any]]] = [
+        (path_str, meta) for path_str, meta, _ in prepared
+    ]
+
+    for path_str, meta, it in prepared:
         series = meta.get("series") or it.get("series", "Other")
         item_id = meta.get("item") or it.get("item", "")
         title = meta.get("title") or item_id
@@ -237,18 +252,21 @@ def build_site(
         guests = meta.get("guests", [])
         keywords = meta.get("keywords", [])
 
-        # Build full item JSON payload
-        item_payload = build_item_payload(item_path, meta)
-        safe_key = f"{series}_{item_id}".replace("/", "_").replace(" ", "_")
-        item_json_rel = f"data/{safe_key}.json"
-        (output_dir / item_json_rel).write_text(
+        # Build the item payload, keyed by the canonical INDEX-path slug
+        slug = item_slug(path_str)
+        item_payload = build_item_payload(journal_dir / path_str, meta, slug)
+        item_json_rel = f"data/{slug}.json"
+        payload_path = output_dir / item_json_rel
+        payload_path.parent.mkdir(parents=True, exist_ok=True)
+        payload_path.write_text(
             json.dumps(item_payload, ensure_ascii=False),
             encoding="utf-8",
         )
 
         manifest_items.append(
             {
-                "id": f"{series}/{item_id}",
+                "id": slug,
+                "path": path_str,
                 "series": series,
                 "item": item_id,
                 "title": title,
@@ -262,8 +280,7 @@ def build_site(
                 "data_url": item_json_rel,
             }
         )
-        processed_count += 1
-        processed_entries.append((path_str, meta))
+    processed_count = len(prepared)
 
     # M4 static per-item pages + sitemap + robots (opt-in).
     if static_pages:

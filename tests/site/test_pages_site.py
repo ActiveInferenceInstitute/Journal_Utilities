@@ -169,7 +169,7 @@ def test_item_page_head_tags_and_transcript(tmp_path: Path) -> None:
     # Canonical URL: percent-encoded series/item, trailing slash, no index.html.
     assert (
         '<link rel="canonical" href="'
-        + page_url("https://example.com/", "Series A", "2021 Talk One")
+        + page_url("https://example.com/", "Series A/2021 Talk One")
         + '">'
         in html_doc
     )
@@ -229,17 +229,17 @@ def test_plan_sitemap_urls_bijection(tmp_path: Path) -> None:
     assert locs[0] == "https://example.com/"
     item_locs = {u.loc for u in urls[1:]}
     assert item_locs == {
-        page_url("https://example.com/", "Series A", "2021 Talk One"),
-        page_url("https://example.com/", "Series A", "2022 Talk Two"),
-        page_url("https://example.com/", "Series B", "Seminar X"),
+        page_url("https://example.com/", "Series A/2021 Talk One"),
+        page_url("https://example.com/", "Series A/2022 Talk Two"),
+        page_url("https://example.com/", "Series B/Seminar X"),
     }
     # lastmod: strictly max parts[].upload_date (spec §3); items 2/3 have no
     # parts dates, so lastmod is omitted even though item 2 has a meta date
     # (meta date still feeds page display and VideoObject uploadDate).
     mods = {u.loc: u.lastmod for u in urls[1:]}
-    assert mods[page_url("https://example.com/", "Series A", "2021 Talk One")] == "2021-06-21"
-    assert mods[page_url("https://example.com/", "Series A", "2022 Talk Two")] is None
-    assert mods[page_url("https://example.com/", "Series B", "Seminar X")] is None
+    assert mods[page_url("https://example.com/", "Series A/2021 Talk One")] == "2021-06-21"
+    assert mods[page_url("https://example.com/", "Series A/2022 Talk Two")] is None
+    assert mods[page_url("https://example.com/", "Series B/Seminar X")] is None
 
 
 def test_build_site_static_pages_integration(tmp_path: Path) -> None:
@@ -299,3 +299,43 @@ def test_prev_next_navigation(tmp_path: Path) -> None:
     # Item 3: other series, no siblings.
     assert "Previous in series" not in third
     assert "Next in series" not in third
+
+
+def test_path_keyed_pages_for_flat_name_collisions(tmp_path: Path) -> None:
+    """Items sharing a flat (series, item) pair in different trees get distinct pages."""
+    journal = tmp_path / "journal"
+    series = "TextbookGroup"
+    paths = [
+        f"data/video/activeinferenceinstitute/{series}/Cohort_1/Meeting_007",
+        f"data/video/activeinferenceinstitute/{series}/Cohort_8/Meeting_007",
+    ]
+    entries = []
+    for n, path_str in enumerate(paths, 1):
+        item_dir = journal / path_str
+        item_dir.mkdir(parents=True)
+        meta = {"series": series, "item": "Meeting_007", "title": f"Cohort {n} meeting"}
+        (item_dir / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
+        entries.append((path_str, meta))
+
+    plans = plan_item_pages(journal, entries, base_url="https://example.com/")
+    assert len(plans) == 2
+    assert {p.rel_path for p in plans} == {
+        f"item/{series}/Cohort_1/Meeting_007/index.html",
+        f"item/{series}/Cohort_8/Meeting_007/index.html",
+    }
+    assert {p.slug for p in plans} == {
+        f"{series}/Cohort_1/Meeting_007",
+        f"{series}/Cohort_8/Meeting_007",
+    }
+    # Sitemap stays a bijection with the index paths: root + 2 distinct items.
+    locs = [u.loc for u in plan_sitemap_urls(plans, base_url="https://example.com/")]
+    assert len(locs) == 3 and len(set(locs)) == 3
+
+
+def test_duplicate_index_path_fails_the_plan(tmp_path: Path) -> None:
+    journal = tmp_path / "journal"
+    path_str = "data/video/activeinferenceinstitute/Series A/Item 1"
+    (journal / path_str).mkdir(parents=True)
+    meta = {"series": "Series A", "item": "Item 1"}
+    with pytest.raises(RuntimeError, match="duplicate item key"):
+        plan_item_pages(journal, [(path_str, meta), (path_str, dict(meta))])
