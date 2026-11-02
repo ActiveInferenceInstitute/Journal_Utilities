@@ -1,7 +1,9 @@
 """Static per-item pages for the Active Inference Journal (M4).
 
-Bakes one crawlable ``/item/<series>/<item>/index.html`` per INDEX.json item
-with server-rendered title, guests, date, summary, chapters as ``?t=`` jump
+Bakes one crawlable ``/item/<slug>/index.html`` per INDEX.json item, where
+``<slug>`` is the item's ``items[].path`` below its source directory (e.g.
+``TextbookGroup/ParrPezzuloFriston2022/Cohort_1/Meeting_007``), with
+server-rendered title, guests, date, summary, chapters as ``?t=`` jump
 links, a YouTube-nocookie embed per part, the FULL transcript text,
 schema.org VideoObject + hasPart Clip + Dataset JSON-LD, and canonical/OG
 head tags.
@@ -20,7 +22,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import quote
 
@@ -49,14 +51,32 @@ _LANG_NORMALIZATION: dict[str, str] = {
 }
 
 
-def page_url(base_url: str, series: str, item: str) -> str:
+def item_slug(path_str: str) -> str:
+    """Canonical item key: the INDEX path below its source directory.
+
+    ``data/video/<source>/<series>/.../<item>`` -> ``<series>/.../<item>``.
+
+    The key is unique per INDEX entry and drives the page path, sitemap URL,
+    payload file and manifest id, so items that share a flat ``(series, item)``
+    pair in different directory trees (e.g. textbook-group cohorts) cannot
+    overwrite each other's pages or data.
+    """
+    parts = [p for p in PurePosixPath(path_str).parts if p not in ("", ".")]
+    if parts[:1] == ["data"] and len(parts) > 3:
+        parts = parts[3:]
+    if not parts or any(p == ".." for p in parts):
+        raise ValueError(f"cannot derive an item key from path {path_str!r}")
+    return "/".join(parts)
+
+
+def page_url(base_url: str, slug: str) -> str:
     """Canonical item URL: percent-encoded segments, trailing slash, no index.html."""
-    return f"{base_url}item/{quote(series, safe='')}/{quote(item, safe='')}/"
+    return f"{base_url}item/{quote(slug, safe='/')}/"
 
 
-def spa_url(base_url: str, series: str, item: str) -> str:
+def spa_url(base_url: str, slug: str) -> str:
     """Backward-compatible hash route into the hash-routed SPA."""
-    return f"{base_url}#/item/{quote(f'{series}/{item}', safe='')}"
+    return f"{base_url}#/item/{quote(slug, safe='')}"
 
 
 def _iso_date(value: Any) -> str | None:  # noqa: ANN401 — metadata fields are untyped by design
@@ -264,39 +284,38 @@ def _fmt_offset(seconds: int) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-def _item_link(m: dict[str, Any] | None, label: str) -> str:
-    """Relative link to a sibling item page (``../../<series>/<item>/``)."""
-    if not m:
+def _item_link(slug: str | None, label: str, rel_prefix: str) -> str:
+    """Relative link to a sibling item page from a page at ``rel_prefix`` depth."""
+    if not slug:
         return ""
-    href = (
-        "../../"
-        + quote(str(m.get("series")), safe="")
-        + "/"
-        + quote(str(m.get("item")), safe="")
-        + "/"
-    )
+    href = rel_prefix + quote(slug, safe="/") + "/"
     return f'<a href="{html.escape(href, quote=True)}">{label}</a>'
 
 
 def _render_item_page(
     journal_dir: Path,
+    path_str: str,
     meta: dict[str, Any],
     base_url: str,
-    prev_meta: dict[str, Any] | None,
-    next_meta: dict[str, Any] | None,
+    prev_slug: str | None,
+    next_slug: str | None,
 ) -> str:
-    """Bake the full HTML document for one item."""
+    """Bake the full HTML document for one item at its INDEX path."""
+    slug = item_slug(path_str)
     series = str(meta.get("series") or "")
     item_id = str(meta.get("item") or "")
     title = str(meta.get("title") or item_id)
-    item_dir = journal_dir / f"data/video/activeinferenceinstitute/{series}/{item_id}"
-    canonical = page_url(base_url, series, item_id)
+    item_dir = journal_dir / path_str
+    depth = slug.count("/") + 1
+    item_prefix = "../" * depth
+    rel_prefix = "../" * (depth + 1)
+    canonical = page_url(base_url, slug)
     item_date = _item_date(meta)
     abstract = _abstract(meta)
     languages = _item_languages(item_dir)
     parts = [p for p in meta.get("parts", []) if isinstance(p, dict) and p.get("video_id")]
     first_vid = str(parts[0]["video_id"]) if parts else ""
-    spa_link = spa_url(base_url, series, item_id)
+    spa_link = spa_url(base_url, slug)
     guests = [str(g) for g in (meta.get("guests") or [])]
 
     head = [
@@ -308,7 +327,7 @@ def _render_item_page(
         f'<meta property="og:url" content="{html.escape(canonical, quote=True)}">',
         f'<meta property="og:image" content="https://i.ytimg.com/vi/{first_vid}/hqdefault.jpg">',
         '<meta name="twitter:card" content="summary_large_image">',
-        '<link rel="stylesheet" href="../../../styles.css">',
+        f'<link rel="stylesheet" href="{rel_prefix}styles.css">',
     ]
     if item_date:
         head.append(
@@ -318,15 +337,15 @@ def _render_item_page(
         )
 
     breadcrumb = (
-        '<nav aria-label="Breadcrumb"><a href="../../../">Active Inference Journal</a>'
-        f' &rsaquo; <a href="../../../#/">{html.escape(series)}</a> &rsaquo; '
+        f'<nav aria-label="Breadcrumb"><a href="{rel_prefix}">Active Inference Journal</a>'
+        f' &rsaquo; <a href="{rel_prefix}#/">{html.escape(series)}</a> &rsaquo; '
         f"{html.escape(item_id)}</nav>"
     )
     nav_links = [
         link
         for link in (
-            _item_link(prev_meta, "&larr; Previous in series"),
-            _item_link(next_meta, "Next in series &rarr;"),
+            _item_link(prev_slug, "&larr; Previous in series", item_prefix),
+            _item_link(next_slug, "Next in series &rarr;", item_prefix),
         )
         if link
     ]
@@ -405,8 +424,9 @@ def _render_item_page(
 
 @dataclass(frozen=True)
 class ItemPage:
-    """One planned per-item page: on-disk path, baked HTML, sitemap date."""
+    """One planned per-item page: canonical key, on-disk path, HTML, sitemap date."""
 
+    slug: str
     series: str
     item: str
     rel_path: str
@@ -422,8 +442,21 @@ def plan_item_pages(
     """Render one static ``index.html`` per processed INDEX entry.
 
     ``entries`` are ``(INDEX.json items[].path, parsed metadata.json)`` pairs in
-    INDEX order; series-adjacent entries become prev/next links.
+    INDEX order; series-adjacent entries become prev/next links. Page paths,
+    canonical URLs and sitemap entries all use the canonical item key
+    (:func:`item_slug`), so entries that share a flat ``(series, item)`` pair
+    in different directory trees cannot overwrite each other. A duplicate key
+    aborts the plan instead of silently dropping pages.
     """
+    slugs: list[str] = []
+    seen: dict[str, str] = {}
+    for path_str, _ in entries:
+        slug = item_slug(path_str)
+        if slug in seen:
+            raise RuntimeError(f"duplicate item key {slug!r}: {seen[slug]} and {path_str}")
+        seen[slug] = path_str
+        slugs.append(slug)
+
     positions: dict[str, list[int]] = {}
     for i, (_, meta) in enumerate(entries):
         positions.setdefault(str(meta.get("series", "")), []).append(i)
@@ -437,14 +470,23 @@ def plan_item_pages(
             continue
         siblings = positions[series]
         pos = siblings.index(idx)
-        prev_meta = entries[siblings[pos - 1]][1] if pos > 0 else None
-        next_meta = entries[siblings[pos + 1]][1] if pos + 1 < len(siblings) else None
+        prev_idx = siblings[pos - 1] if pos > 0 else None
+        next_idx = siblings[pos + 1] if pos + 1 < len(siblings) else None
+        slug = slugs[idx]
         plans.append(
             ItemPage(
+                slug=slug,
                 series=series,
                 item=item_id,
-                rel_path=f"item/{series}/{item_id}/index.html",
-                html=_render_item_page(journal_dir, meta, base_url, prev_meta, next_meta),
+                rel_path=f"item/{slug}/index.html",
+                html=_render_item_page(
+                    journal_dir,
+                    path_str,
+                    meta,
+                    base_url,
+                    slugs[prev_idx] if prev_idx is not None else None,
+                    slugs[next_idx] if next_idx is not None else None,
+                ),
                 lastmod=_lastmod(meta),
             )
         )
@@ -464,7 +506,5 @@ def plan_sitemap_urls(plans: list[ItemPage], base_url: str = BASE_URL) -> list[S
     """Sitemap entries: the root first, then one canonical URL per item."""
     urls = [SitemapUrl(loc=base_url)]
     for plan in plans:
-        urls.append(
-            SitemapUrl(loc=page_url(base_url, plan.series, plan.item), lastmod=plan.lastmod)
-        )
+        urls.append(SitemapUrl(loc=page_url(base_url, plan.slug), lastmod=plan.lastmod))
     return urls

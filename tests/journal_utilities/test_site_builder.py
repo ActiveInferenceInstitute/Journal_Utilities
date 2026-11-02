@@ -67,7 +67,7 @@ def test_build_item_payload_and_site(tmp_path: Path) -> None:
     }
     (journal_dir / "INDEX.json").write_text(json.dumps(index_data), encoding="utf-8")
 
-    payload = build_item_payload(item_dir, meta)
+    payload = build_item_payload(item_dir, meta, "Livestream/LiveStream_001")
     assert payload["id"] == "Livestream/LiveStream_001"
     assert "es" in payload["translations"]
     assert len(payload["translations"]["es"][0]["cues"]) == 1
@@ -107,7 +107,7 @@ def test_build_item_payload_reads_capital_translations_dir(tmp_path: Path) -> No
     # Garbage-named file without a language tag must be ignored, not crash.
     (tr_dir / "dump_transcript.srt").write_text(SRT_BODY, encoding="utf-8")
 
-    payload = build_item_payload(item_dir, {"series": "S", "item": "I", "parts": []})
+    payload = build_item_payload(item_dir, {"series": "S", "item": "I", "parts": []}, "S/I")
 
     assert list(payload["translations"]) == ["chi"]
     assert payload["translations"]["chi"][0]["file"] == "V.chi(translated).srt"
@@ -120,7 +120,7 @@ def test_build_item_payload_matches_uppercase_srt_extension(tmp_path: Path) -> N
     tr_dir.mkdir(parents=True)
     (tr_dir / "V.fr.SRT").write_text(SRT_BODY, encoding="utf-8")
 
-    payload = build_item_payload(item_dir, {"series": "S", "item": "I", "parts": []})
+    payload = build_item_payload(item_dir, {"series": "S", "item": "I", "parts": []}, "S/I")
 
     assert "fr" in payload["translations"]
 
@@ -137,7 +137,7 @@ def test_build_item_payload_dedupes_both_dir_spellings(tmp_path: Path) -> None:
     (item_dir / "translations" / "V.fr.srt").write_text(SRT_BODY, encoding="utf-8")
     (item_dir / "Translations" / "V.fr.srt").write_text(SRT_BODY, encoding="utf-8")
 
-    payload = build_item_payload(item_dir, {"series": "S", "item": "I", "parts": []})
+    payload = build_item_payload(item_dir, {"series": "S", "item": "I", "parts": []}, "S/I")
 
     # The same file under both spellings must appear once, from lowercase dir.
     assert len(payload["translations"]["fr"]) == 1
@@ -354,3 +354,51 @@ def test_item_page_languages_cover_both_dir_spellings(tmp_path: Path) -> None:
     # Languages link to the interactive SPA view, never to fabricated files.
     spa_link = f"{M4_BASE_URL}#/item/Applied%20Active%20Inference%20Symposium%2F2021%20Talk%20One"
     assert f'href="{spa_link}"' in html_doc
+
+
+def test_build_site_keys_payloads_and_manifest_by_index_path(tmp_path: Path) -> None:
+    """Colliding flat (series, item) pairs must not overwrite each other."""
+    journal_dir = tmp_path / "journal"
+    series = "TextbookGroup"
+    items = []
+    for cohort in ("Cohort_1", "Cohort_8"):
+        path_str = f"data/video/activeinferenceinstitute/{series}/{cohort}/Meeting_007"
+        item_dir = journal_dir / path_str
+        item_dir.mkdir(parents=True)
+        meta = {
+            "series": series,
+            "item": "Meeting_007",
+            "title": f"{cohort} meeting",
+            "parts": [],
+        }
+        (item_dir / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
+        items.append({"path": path_str, "series": series, "item": "Meeting_007"})
+    (journal_dir / "INDEX.json").write_text(json.dumps({"items": items}), encoding="utf-8")
+
+    out_dir = tmp_path / "site_out"
+    res = build_site(journal_dir=journal_dir, output_dir=out_dir, static_pages=True)
+    assert res["items_processed"] == 2
+    assert res["pages_written"] == 2
+
+    payloads = sorted(p.relative_to(out_dir).as_posix() for p in (out_dir / "data").rglob("*.json"))
+    assert payloads == [
+        f"data/{series}/Cohort_1/Meeting_007.json",
+        f"data/{series}/Cohort_8/Meeting_007.json",
+    ]
+
+    manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["total_items"] == 2
+    assert [m["id"] for m in manifest["items"]] == [
+        f"{series}/Cohort_1/Meeting_007",
+        f"{series}/Cohort_8/Meeting_007",
+    ]
+    assert [m["path"] for m in manifest["items"]] == [i["path"] for i in items]
+    assert len({m["data_url"] for m in manifest["items"]}) == 2
+
+    for cohort in ("Cohort_1", "Cohort_8"):
+        page = out_dir / "item" / series / cohort / "Meeting_007" / "index.html"
+        assert page.exists()
+    sitemap = (out_dir / "sitemap.xml").read_text(encoding="utf-8")
+    assert sitemap.count("<loc>") == 3  # root + 2 distinct items
+    for cohort in ("Cohort_1", "Cohort_8"):
+        assert f"<loc>{M4_BASE_URL}item/{series}/{cohort}/Meeting_007/</loc>" in sitemap
