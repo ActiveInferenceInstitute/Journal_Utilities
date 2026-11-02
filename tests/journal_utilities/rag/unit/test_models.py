@@ -202,9 +202,7 @@ def test_detailed_analysis_creation() -> None:
                 description="Algorithm for belief propagation",
             )
         ],
-        equations=[
-            Equation(formula="F = E_q[ln q(x) - ln p(x,y)]")
-        ],
+        equations=[Equation(formula="F = E_q[ln q(x) - ln p(x,y)]")],
     )
     assert len(analysis.methods_techniques) == 1
     assert len(analysis.equations) == 1
@@ -237,9 +235,7 @@ def test_extracted_entities_with_detailed() -> None:
     )
 
     detailed = DetailedAnalysis(
-        methods_techniques=[
-            MethodTechnique(name="Test Method", description="A test method")
-        ],
+        methods_techniques=[MethodTechnique(name="Test Method", description="A test method")],
     )
 
     extracted = ExtractedEntities(

@@ -34,7 +34,9 @@ def _make_mock_surreal(query_return_value=None):
     mock.use = AsyncMock()
     mock.close = AsyncMock()
     mock.create = AsyncMock(return_value={"id": "audit:1"})
-    mock.query = AsyncMock(return_value=query_return_value if query_return_value is not None else [])
+    mock.query = AsyncMock(
+        return_value=query_return_value if query_return_value is not None else []
+    )
     return mock
 
 
@@ -86,9 +88,7 @@ async def test_get_recent_import_runs_empty(
     """get_recent_import_runs returns empty list when no runs exist."""
     mock = _make_mock_surreal(query_return_value=[])
     with patch(DB_PATCH_TARGET, return_value=mock):
-        runs = await get_recent_import_runs(
-            db_url, db_user, db_password, db_name, db_namespace
-        )
+        runs = await get_recent_import_runs(db_url, db_user, db_password, db_name, db_namespace)
 
     assert runs == []
 
@@ -107,9 +107,7 @@ async def test_get_import_summary_from_record(
     db_namespace: str,
 ) -> None:
     """get_import_summary returns stats from a summary record."""
-    mock_result = [
-        {"result_data": {"total": 10, "inserted": 5, "skipped": 3, "failed": 2}}
-    ]
+    mock_result = [{"result_data": {"total": 10, "inserted": 5, "skipped": 3, "failed": 2}}]
 
     mock = _make_mock_surreal(query_return_value=mock_result)
     with patch(DB_PATCH_TARGET, return_value=mock):
@@ -223,8 +221,7 @@ async def test_rollback_import(
         side_effect=[
             # 1. Get successful inserts for this run (audit carries the
             #    created session id in result_data)
-            [{"id": "audit:1", "session_name": "Session A",
-              "result_data": {"id": "session:1"}}],
+            [{"id": "audit:1", "session_name": "Session A", "result_data": {"id": "session:1"}}],
             # 2. DELETE the exact session record
             [],
             # 3. UPDATE the audit record to rolled_back

@@ -89,8 +89,11 @@ def render_txt(blocks: list, meta: dict) -> tuple[str, set[str]]:
     for block in blocks:
         vid = block.get("video_id", "")
         mapping = speaker_mapping(meta, vid)
-        unmapped |= {s.get("speaker") for s in block["segments"]
-                     if s.get("speaker") and s["speaker"] not in mapping}
+        unmapped |= {
+            s.get("speaker")
+            for s in block["segments"]
+            if s.get("speaker") and s["speaker"] not in mapping
+        }
         text = render_block(block["segments"], mapping)
         sections.append(text if len(blocks) == 1 else f"## {vid}\n\n{text}")
     return "\n\n".join(sections) + "\n", unmapped
@@ -138,17 +141,20 @@ def process_item(item_dir: Path, meta: dict, apply: bool) -> dict | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--journal", type=Path, default=REPO.parent / "ActiveInferenceJournal")
     parser.add_argument("--item", help="single item (path relative to the source root)")
-    parser.add_argument("--apply", action="store_true",
-                        help="write transcript.txt (default: dry-run plan)")
+    parser.add_argument(
+        "--apply", action="store_true", help="write transcript.txt (default: dry-run plan)"
+    )
     args = parser.parse_args()
 
     root = args.journal / SRC_PREFIX
-    targets = [root / args.item / "metadata.json"] if args.item \
-        else sorted(root.rglob("metadata.json"))
+    targets = (
+        [root / args.item / "metadata.json"] if args.item else sorted(root.rglob("metadata.json"))
+    )
 
     counts: dict[str, int] = {}
     for meta_path in targets:
@@ -164,11 +170,16 @@ def main() -> int:
         counts[result["action"]] = counts.get(result["action"], 0) + 1
         if result["action"] != "unchanged":
             rel = meta_path.parent.relative_to(root)
-            todo = f"  [unmapped: {', '.join(sorted(result['unmapped']))}]" \
-                if result["unmapped"] and result["action"] != "skip-legacy-json" else ""
+            todo = (
+                f"  [unmapped: {', '.join(sorted(result['unmapped']))}]"
+                if result["unmapped"] and result["action"] != "skip-legacy-json"
+                else ""
+            )
             print(f"{result['action']:16} {rel}{todo}")
 
-    print("\nsummary:", ", ".join(f"{k}: {v}" for k, v in sorted(counts.items())) or "nothing to do")
+    print(
+        "\nsummary:", ", ".join(f"{k}: {v}" for k, v in sorted(counts.items())) or "nothing to do"
+    )
     if not args.apply:
         print("dry run — pass --apply to write")
     else:

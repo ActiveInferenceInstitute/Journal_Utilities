@@ -122,7 +122,12 @@ def load_rows(
         except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
             logger.warning("coda fetch failed: %s", exc)
     if cache_path.exists():
-        items = cast(list[dict[str, Any]], json.loads(cache_path.read_text(encoding="utf-8")).get("items", []))
+        items = cast(
+            list[dict[str, Any]],
+            json.loads(cache_path.read_text(encoding="utf-8")).get("items", []),
+        )
         return items, f"cache {cache_path.name} ({len(items)} rows)"
-    items = cast(list[dict[str, Any]], json.loads(snapshot_path.read_text(encoding="utf-8")).get("items", []))
+    items = cast(
+        list[dict[str, Any]], json.loads(snapshot_path.read_text(encoding="utf-8")).get("items", [])
+    )
     return items, f"snapshot {snapshot_path.name} ({len(items)} rows — one page, coverage reduced)"

@@ -21,6 +21,7 @@ Environment:
   OPENROUTER_API_KEY  (required — export it, or set it in the repo's gitignored .env)
   OPENROUTER_BASE_URL (default https://openrouter.ai/api/v1)
 """
+
 from __future__ import annotations
 
 import argparse

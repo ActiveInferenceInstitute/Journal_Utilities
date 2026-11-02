@@ -22,7 +22,9 @@ DEFAULT_WPM: int = 160
 WORDS_PER_SEGMENT: int = 80
 
 
-def parse_txt_to_segments(txt_path: str | Path, wpm: int = DEFAULT_WPM) -> list[dict[str, float | str]]:
+def parse_txt_to_segments(
+    txt_path: str | Path, wpm: int = DEFAULT_WPM
+) -> list[dict[str, float | str]]:
     """Split a plain-text transcript into ~30-second pseudo-timed segments.
 
     Args:
@@ -68,7 +70,9 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional output JSON path (defaults to printing to stdout)",
     )
-    parser.add_argument("--wpm", type=int, default=DEFAULT_WPM, help="Speaking rate in words per minute")
+    parser.add_argument(
+        "--wpm", type=int, default=DEFAULT_WPM, help="Speaking rate in words per minute"
+    )
     args = parser.parse_args(argv)
 
     segments = parse_txt_to_segments(args.input, wpm=args.wpm)

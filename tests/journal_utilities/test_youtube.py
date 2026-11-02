@@ -136,9 +136,7 @@ class TestIsVideoPrivate:
     def test_video_in_private_list(self, tmp_path):
         """Test returns True when video is in private list."""
         private_file = tmp_path / "private_videos.json"
-        private_file.write_text(json.dumps({
-            "private_video_ids": ["abc123", "xyz789"]
-        }))
+        private_file.write_text(json.dumps({"private_video_ids": ["abc123", "xyz789"]}))
 
         with patch.object(Path, "__new__", return_value=tmp_path / "youtube.py"):
             with patch("journal_utilities.youtube.youtube.Path") as mock_path:
@@ -148,16 +146,14 @@ class TestIsVideoPrivate:
 
                 # Mock the file reading
                 with patch("builtins.open", create=True) as mock_open:
-                    mock_open.return_value.__enter__.return_value.read.return_value = json.dumps({
-                        "private_video_ids": ["abc123", "xyz789"]
-                    })
+                    mock_open.return_value.__enter__.return_value.read.return_value = json.dumps(
+                        {"private_video_ids": ["abc123", "xyz789"]}
+                    )
 
     def test_video_not_in_private_list(self, tmp_path):
         """Test returns False when video is not in private list."""
         private_file = tmp_path / "private_videos.json"
-        private_file.write_text(json.dumps({
-            "private_video_ids": ["abc123", "xyz789"]
-        }))
+        private_file.write_text(json.dumps({"private_video_ids": ["abc123", "xyz789"]}))
 
         # Since we're mocking, we test the logic directly
         # The function should return False for videos not in the list
@@ -180,23 +176,29 @@ class TestMarkVideoPrivate:
 class TestYoutubeIdValidation:
     """Additional tests for YouTube ID validation patterns."""
 
-    @pytest.mark.parametrize("url,expected_id", [
-        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
-        ("https://youtu.be/abc123_-XYZ", "abc123_-XYZ"),
-        ("https://youtube.com/live/TestVideo12", "TestVideo12"),
-        ("http://youtube.com/watch?v=00000000000", "00000000000"),
-    ])
+    @pytest.mark.parametrize(
+        "url,expected_id",
+        [
+            ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+            ("https://youtu.be/abc123_-XYZ", "abc123_-XYZ"),
+            ("https://youtube.com/live/TestVideo12", "TestVideo12"),
+            ("http://youtube.com/watch?v=00000000000", "00000000000"),
+        ],
+    )
     def test_various_url_formats(self, url, expected_id):
         """Test extracting IDs from various URL formats."""
         assert extract_youtube_id(url) == expected_id
 
-    @pytest.mark.parametrize("url", [
-        "https://vimeo.com/123456789",
-        "https://www.twitch.tv/videos/12345",
-        "ftp://youtube.com/watch?v=test",
-        "",
-        None,
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://vimeo.com/123456789",
+            "https://www.twitch.tv/videos/12345",
+            "ftp://youtube.com/watch?v=test",
+            "",
+            None,
+        ],
+    )
     def test_non_youtube_urls(self, url):
         """Test that non-YouTube URLs return None."""
         assert extract_youtube_id(url) is None

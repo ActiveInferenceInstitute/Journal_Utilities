@@ -195,9 +195,7 @@ class TestExportSingle:
 
 class TestExportTranscripts:
     def test_batch_plaintext(self, transcript_dir, output_dir):
-        results = export_transcripts(
-            transcript_dir, output_dir, formats=[ExportFormat.PLAINTEXT]
-        )
+        results = export_transcripts(transcript_dir, output_dir, formats=[ExportFormat.PLAINTEXT])
         assert "plaintext" in results
         assert len(results["plaintext"]) == 2
         successes = [r for r in results["plaintext"] if r.status == "success"]

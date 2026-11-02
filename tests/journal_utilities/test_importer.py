@@ -35,7 +35,7 @@ class TestInsertMissingSessionsFromJson:
                         "YouTube": "https://youtu.be/abc123xyz99",
                         "Unique event name": "GuestStream #002.1",
                     }
-                }
+                },
             ]
         }
 
@@ -58,12 +58,7 @@ class TestInsertMissingSessionsFromJson:
         """Test importing new sessions."""
         with patch("journal_utilities.importer.DatabaseClient", return_value=mock_db_client):
             stats = await insert_missing_sessions_from_json(
-                sample_coda_json,
-                "ws://test:8080",
-                "user",
-                "pass",
-                "db",
-                "ns"
+                sample_coda_json, "ws://test:8080", "user", "pass", "db", "ns"
             )
 
         assert stats["total"] == 2
@@ -78,12 +73,7 @@ class TestInsertMissingSessionsFromJson:
 
         with patch("journal_utilities.importer.DatabaseClient", return_value=mock_db_client):
             stats = await insert_missing_sessions_from_json(
-                sample_coda_json,
-                "ws://test:8080",
-                "user",
-                "pass",
-                "db",
-                "ns"
+                sample_coda_json, "ws://test:8080", "user", "pass", "db", "ns"
             )
 
         assert stats["total"] == 2
@@ -109,12 +99,7 @@ class TestInsertMissingSessionsFromJson:
 
         with patch("journal_utilities.importer.DatabaseClient", return_value=mock_db_client):
             stats = await insert_missing_sessions_from_json(
-                str(json_file),
-                "ws://test:8080",
-                "user",
-                "pass",
-                "db",
-                "ns"
+                str(json_file), "ws://test:8080", "user", "pass", "db", "ns"
             )
 
         assert stats["total"] == 1
@@ -125,12 +110,7 @@ class TestInsertMissingSessionsFromJson:
         """Test handling of missing JSON file."""
         with patch("journal_utilities.importer.DatabaseClient", return_value=mock_db_client):
             stats = await insert_missing_sessions_from_json(
-                "/nonexistent/file.json",
-                "ws://test:8080",
-                "user",
-                "pass",
-                "db",
-                "ns"
+                "/nonexistent/file.json", "ws://test:8080", "user", "pass", "db", "ns"
             )
 
         # Should return empty stats when file read fails
@@ -141,12 +121,7 @@ class TestInsertMissingSessionsFromJson:
         """Test that audit records are created."""
         with patch("journal_utilities.importer.DatabaseClient", return_value=mock_db_client):
             await insert_missing_sessions_from_json(
-                sample_coda_json,
-                "ws://test:8080",
-                "user",
-                "pass",
-                "db",
-                "ns"
+                sample_coda_json, "ws://test:8080", "user", "pass", "db", "ns"
             )
 
         # Should have created audit records
@@ -161,7 +136,7 @@ class TestInsertMissingSessionsFromJson:
         captured_sessions = []
 
         async def capture_create(table, data):
-            if table == 'session':
+            if table == "session":
                 captured_sessions.append(data)
             return {"id": f"{table}:test"}
 
@@ -169,17 +144,12 @@ class TestInsertMissingSessionsFromJson:
 
         with patch("journal_utilities.importer.DatabaseClient", return_value=mock_db_client):
             await insert_missing_sessions_from_json(
-                sample_coda_json,
-                "ws://test:8080",
-                "user",
-                "pass",
-                "db",
-                "ns"
+                sample_coda_json, "ws://test:8080", "user", "pass", "db", "ns"
             )
 
         assert len(captured_sessions) == 2
-        assert captured_sessions[0]['category'] == 'Livestream'
-        assert captured_sessions[1]['category'] == 'GuestStream'
+        assert captured_sessions[0]["category"] == "Livestream"
+        assert captured_sessions[1]["category"] == "GuestStream"
 
 
 class TestJsonParsing:
@@ -204,12 +174,7 @@ class TestJsonParsing:
 
         with patch("journal_utilities.importer.DatabaseClient", return_value=mock_db_client):
             stats = await insert_missing_sessions_from_json(
-                str(json_file),
-                "ws://test:8080",
-                "user",
-                "pass",
-                "db",
-                "ns"
+                str(json_file), "ws://test:8080", "user", "pass", "db", "ns"
             )
 
         assert stats["total"] == 0
@@ -231,12 +196,7 @@ class TestJsonParsing:
 
         with patch("journal_utilities.importer.DatabaseClient", return_value=mock_db_client):
             stats = await insert_missing_sessions_from_json(
-                str(json_file),
-                "ws://test:8080",
-                "user",
-                "pass",
-                "db",
-                "ns"
+                str(json_file), "ws://test:8080", "user", "pass", "db", "ns"
             )
 
         assert stats["total"] == 1

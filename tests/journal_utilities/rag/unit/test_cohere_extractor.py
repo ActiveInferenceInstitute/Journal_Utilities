@@ -33,8 +33,12 @@ def mock_cohere_client():
 @pytest.fixture
 def mock_schemas():
     """Mock schema loading."""
-    with patch("journal_utilities.rag.extractors.cohere_extractor.load_core_schema") as mock_core, \
-         patch("journal_utilities.rag.extractors.cohere_extractor.load_detailed_schema") as mock_detailed:
+    with (
+        patch("journal_utilities.rag.extractors.cohere_extractor.load_core_schema") as mock_core,
+        patch(
+            "journal_utilities.rag.extractors.cohere_extractor.load_detailed_schema"
+        ) as mock_detailed,
+    ):
         mock_core.return_value = {"type": "object"}
         mock_detailed.return_value = {"type": "object"}
         yield mock_core, mock_detailed
@@ -76,13 +80,19 @@ class TestExtractCoreEntities:
         """Test successful core entity extraction."""
         # Configure mock response
         mock_response = MagicMock()
-        mock_response.message.content = [MagicMock(text=json.dumps({
-            "concepts": [],
-            "researchers": [],
-            "citations": [],
-            "technical_terms": [],
-            "key_insights": []
-        }))]
+        mock_response.message.content = [
+            MagicMock(
+                text=json.dumps(
+                    {
+                        "concepts": [],
+                        "researchers": [],
+                        "citations": [],
+                        "technical_terms": [],
+                        "key_insights": [],
+                    }
+                )
+            )
+        ]
 
         mock_client_instance = MagicMock()
         mock_client_instance.chat.return_value = mock_response
@@ -97,26 +107,28 @@ class TestExtractCoreEntities:
     def test_extract_core_entities_with_data(self, mock_settings, mock_cohere_client, mock_schemas):
         """Test extraction returns populated entities."""
         mock_response = MagicMock()
-        mock_response.message.content = [MagicMock(text=json.dumps({
-            "concepts": [
-                {
-                    "name": "Active Inference",
-                    "definition": "A framework for understanding behavior",
-                    "category": "theoretical",
-                    "related_concepts": []
-                }
-            ],
-            "researchers": [
-                {
-                    "name": "Karl Friston",
-                    "role": "cited_author",
-                    "affiliation": "UCL"
-                }
-            ],
-            "citations": [],
-            "technical_terms": [],
-            "key_insights": ["Key insight 1"]
-        }))]
+        mock_response.message.content = [
+            MagicMock(
+                text=json.dumps(
+                    {
+                        "concepts": [
+                            {
+                                "name": "Active Inference",
+                                "definition": "A framework for understanding behavior",
+                                "category": "theoretical",
+                                "related_concepts": [],
+                            }
+                        ],
+                        "researchers": [
+                            {"name": "Karl Friston", "role": "cited_author", "affiliation": "UCL"}
+                        ],
+                        "citations": [],
+                        "technical_terms": [],
+                        "key_insights": ["Key insight 1"],
+                    }
+                )
+            )
+        ]
 
         mock_client_instance = MagicMock()
         mock_client_instance.chat.return_value = mock_response
@@ -131,7 +143,9 @@ class TestExtractCoreEntities:
         assert result.researchers[0].name == "Karl Friston"
         assert len(result.key_insights) == 1
 
-    def test_extract_core_entities_handles_error(self, mock_settings, mock_cohere_client, mock_schemas):
+    def test_extract_core_entities_handles_error(
+        self, mock_settings, mock_cohere_client, mock_schemas
+    ):
         """Test extraction raises exception on API error."""
         mock_client_instance = MagicMock()
         mock_client_instance.chat.side_effect = Exception("API Error")
@@ -146,17 +160,25 @@ class TestExtractCoreEntities:
 class TestExtractDetailedAnalysis:
     """Tests for extract_detailed_analysis method."""
 
-    def test_extract_detailed_analysis_success(self, mock_settings, mock_cohere_client, mock_schemas):
+    def test_extract_detailed_analysis_success(
+        self, mock_settings, mock_cohere_client, mock_schemas
+    ):
         """Test successful detailed analysis extraction."""
         mock_response = MagicMock()
-        mock_response.message.content = [MagicMock(text=json.dumps({
-            "methods_techniques": [],
-            "mathematical_notation": [],
-            "equations": [],
-            "tools_resources": [],
-            "research_problems": [],
-            "applications": []
-        }))]
+        mock_response.message.content = [
+            MagicMock(
+                text=json.dumps(
+                    {
+                        "methods_techniques": [],
+                        "mathematical_notation": [],
+                        "equations": [],
+                        "tools_resources": [],
+                        "research_problems": [],
+                        "applications": [],
+                    }
+                )
+            )
+        ]
 
         mock_client_instance = MagicMock()
         mock_client_instance.chat.return_value = mock_response
@@ -167,28 +189,36 @@ class TestExtractDetailedAnalysis:
 
         assert isinstance(result, DetailedAnalysis)
 
-    def test_extract_detailed_analysis_with_data(self, mock_settings, mock_cohere_client, mock_schemas):
+    def test_extract_detailed_analysis_with_data(
+        self, mock_settings, mock_cohere_client, mock_schemas
+    ):
         """Test detailed extraction returns populated data."""
         mock_response = MagicMock()
-        mock_response.message.content = [MagicMock(text=json.dumps({
-            "methods_techniques": [
-                {
-                    "name": "Variational Inference",
-                    "description": "A method for approximating intractable integrals"
-                }
-            ],
-            "mathematical_notation": [],
-            "equations": [],
-            "tools_resources": [
-                {
-                    "name": "pymdp",
-                    "type": "library",
-                    "purpose": "Active Inference in Python"
-                }
-            ],
-            "research_problems": [],
-            "applications": []
-        }))]
+        mock_response.message.content = [
+            MagicMock(
+                text=json.dumps(
+                    {
+                        "methods_techniques": [
+                            {
+                                "name": "Variational Inference",
+                                "description": "A method for approximating intractable integrals",
+                            }
+                        ],
+                        "mathematical_notation": [],
+                        "equations": [],
+                        "tools_resources": [
+                            {
+                                "name": "pymdp",
+                                "type": "library",
+                                "purpose": "Active Inference in Python",
+                            }
+                        ],
+                        "research_problems": [],
+                        "applications": [],
+                    }
+                )
+            )
+        ]
 
         mock_client_instance = MagicMock()
         mock_client_instance.chat.return_value = mock_response
@@ -208,23 +238,35 @@ class TestExtractComplete:
     def test_extract_complete_with_detailed(self, mock_settings, mock_cohere_client, mock_schemas):
         """Test complete extraction includes both core and detailed."""
         mock_response_core = MagicMock()
-        mock_response_core.message.content = [MagicMock(text=json.dumps({
-            "concepts": [],
-            "researchers": [],
-            "citations": [],
-            "technical_terms": [],
-            "key_insights": []
-        }))]
+        mock_response_core.message.content = [
+            MagicMock(
+                text=json.dumps(
+                    {
+                        "concepts": [],
+                        "researchers": [],
+                        "citations": [],
+                        "technical_terms": [],
+                        "key_insights": [],
+                    }
+                )
+            )
+        ]
 
         mock_response_detailed = MagicMock()
-        mock_response_detailed.message.content = [MagicMock(text=json.dumps({
-            "methods_techniques": [],
-            "mathematical_notation": [],
-            "equations": [],
-            "tools_resources": [],
-            "research_problems": [],
-            "applications": []
-        }))]
+        mock_response_detailed.message.content = [
+            MagicMock(
+                text=json.dumps(
+                    {
+                        "methods_techniques": [],
+                        "mathematical_notation": [],
+                        "equations": [],
+                        "tools_resources": [],
+                        "research_problems": [],
+                        "applications": [],
+                    }
+                )
+            )
+        ]
 
         mock_client_instance = MagicMock()
         mock_client_instance.chat.side_effect = [mock_response_core, mock_response_detailed]
@@ -238,16 +280,24 @@ class TestExtractComplete:
         assert result.transcript_id == "test-123"
         assert mock_client_instance.chat.call_count == 2
 
-    def test_extract_complete_without_detailed(self, mock_settings, mock_cohere_client, mock_schemas):
+    def test_extract_complete_without_detailed(
+        self, mock_settings, mock_cohere_client, mock_schemas
+    ):
         """Test complete extraction can skip detailed analysis."""
         mock_response = MagicMock()
-        mock_response.message.content = [MagicMock(text=json.dumps({
-            "concepts": [],
-            "researchers": [],
-            "citations": [],
-            "technical_terms": [],
-            "key_insights": []
-        }))]
+        mock_response.message.content = [
+            MagicMock(
+                text=json.dumps(
+                    {
+                        "concepts": [],
+                        "researchers": [],
+                        "citations": [],
+                        "technical_terms": [],
+                        "key_insights": [],
+                    }
+                )
+            )
+        ]
 
         mock_client_instance = MagicMock()
         mock_client_instance.chat.return_value = mock_response
@@ -264,16 +314,24 @@ class TestExtractComplete:
 class TestBackwardCompatibility:
     """Tests for deprecated backward compatibility methods."""
 
-    def test_extract_entities_calls_core_entities(self, mock_settings, mock_cohere_client, mock_schemas):
+    def test_extract_entities_calls_core_entities(
+        self, mock_settings, mock_cohere_client, mock_schemas
+    ):
         """Test deprecated extract_entities calls extract_core_entities."""
         mock_response = MagicMock()
-        mock_response.message.content = [MagicMock(text=json.dumps({
-            "concepts": [],
-            "researchers": [],
-            "citations": [],
-            "technical_terms": [],
-            "key_insights": []
-        }))]
+        mock_response.message.content = [
+            MagicMock(
+                text=json.dumps(
+                    {
+                        "concepts": [],
+                        "researchers": [],
+                        "citations": [],
+                        "technical_terms": [],
+                        "key_insights": [],
+                    }
+                )
+            )
+        ]
 
         mock_client_instance = MagicMock()
         mock_client_instance.chat.return_value = mock_response

@@ -137,7 +137,8 @@ def parse_args() -> argparse.Namespace:
 
     # Verbosity
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Enable debug logging",
     )
@@ -181,7 +182,10 @@ def main() -> int:
         for i, playlist in enumerate(raw_playlists):
             logger.info(
                 "[%d/%d] Enumerating: %s (%s)",
-                i + 1, len(raw_playlists), playlist.title, playlist.id,
+                i + 1,
+                len(raw_playlists),
+                playlist.title,
+                playlist.id,
             )
             videos = enumerate_playlist_videos(
                 playlist.url,
@@ -262,7 +266,9 @@ def main() -> int:
 
         logger.info(
             "Transcript downloads: %d new, %d skipped, %d failed",
-            total_downloaded, total_skipped, total_failed,
+            total_downloaded,
+            total_skipped,
+            total_failed,
         )
 
     # ------------------------------------------------------------------

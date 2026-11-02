@@ -75,7 +75,7 @@ class TestDatabaseClient:
             user="testuser",
             password="testpass",
             name="testdb",
-            namespace="testns"
+            namespace="testns",
         )
 
     @pytest.mark.asyncio
@@ -86,11 +86,10 @@ class TestDatabaseClient:
             await client.connect()
 
             mock_surreal.connect.assert_called_once()
-            mock_surreal.signin.assert_called_once_with({
-                'username': 'testuser',
-                'password': 'testpass'
-            })
-            mock_surreal.use.assert_called_once_with('testns', 'testdb')
+            mock_surreal.signin.assert_called_once_with(
+                {"username": "testuser", "password": "testpass"}
+            )
+            mock_surreal.use.assert_called_once_with("testns", "testdb")
             assert client._connected is True
 
     @pytest.mark.asyncio
@@ -189,6 +188,7 @@ class TestAuditFunctions:
         ]
         with patch(self.DB_PATCH, return_value=mock_surreal):
             from journal_utilities.data.database import get_recent_import_runs
+
             runs = await get_recent_import_runs(**db_params)
         assert len(runs) == 1
         assert runs[0]["import_run_id"] == "run_1"
@@ -201,6 +201,7 @@ class TestAuditFunctions:
         ]
         with patch(self.DB_PATCH, return_value=mock_surreal):
             from journal_utilities.data.database import get_import_summary
+
             summary = await get_import_summary("run_1", **db_params)
         assert summary["total"] == 20
 
@@ -218,6 +219,7 @@ class TestAuditFunctions:
         ]
         with patch(self.DB_PATCH, return_value=mock_surreal):
             from journal_utilities.data.database import get_failed_imports
+
             failures = await get_failed_imports("run_1", **db_params)
         assert len(failures) == 1
         assert failures[0]["session_name"] == "Fail Session"
@@ -251,4 +253,3 @@ class TestImportSummary:
         assert stats["inserted"] == 2
         assert stats["skipped"] == 1
         assert stats["failed"] == 2
-

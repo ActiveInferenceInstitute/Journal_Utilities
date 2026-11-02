@@ -10,12 +10,16 @@ sys.path.insert(0, str(REPO / "scripts"))
 from transcribe_worklist import SRC_PREFIX, build_worklist, write_journal_transcript
 
 
-def _make_item(root: Path, rel: str, vids: list[str], transcript: bool = False,
-               date: str = "", dup: str = "") -> None:
+def _make_item(
+    root: Path, rel: str, vids: list[str], transcript: bool = False, date: str = "", dup: str = ""
+) -> None:
     item = root / SRC_PREFIX / rel
     item.mkdir(parents=True)
-    meta = {"series": rel.split("/")[0], "item": rel.split("/")[-1],
-            "parts": [{"video_id": v} for v in vids]}
+    meta = {
+        "series": rel.split("/")[0],
+        "item": rel.split("/")[-1],
+        "parts": [{"video_id": v} for v in vids],
+    }
     if date:
         meta["date"] = date
     if dup:
@@ -40,7 +44,8 @@ class TestBuildWorklist:
         _make_item(tmp_path, "A/all_private", ["vidprivate1"])
         _make_item(tmp_path, "A/mixed", ["vidprivate1", "vid00000001"])
         (tmp_path / SRC_PREFIX / "private_videos.json").write_text(
-            json.dumps({"videos": [{"video_id": "vidprivate1"}]}))
+            json.dumps({"videos": [{"video_id": "vidprivate1"}]})
+        )
         excluded = []
         work = build_worklist(tmp_path, excluded)
         assert [w["rel"] for w in work] == ["A/mixed"]
@@ -52,7 +57,8 @@ class TestWriteJournalTranscript:
     def _cache(self, out_dir: Path, vid: str, text: str) -> None:
         (out_dir / f"{vid}.simple.txt").write_text(text)
         (out_dir / f"{vid}.simple.json").write_text(
-            json.dumps([{"speaker": "SPEAKER_00", "text": text}]))
+            json.dumps([{"speaker": "SPEAKER_00", "text": text}])
+        )
 
     def test_single_part_plain(self, tmp_path):
         item, out = tmp_path / "item", tmp_path / "out"

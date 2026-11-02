@@ -140,7 +140,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Only include videos before this date (YYYYMMDD)",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Enable debug logging",
     )
@@ -154,7 +155,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=str,
         default=None,
         help="Browser to extract cookies from (e.g. safari, chrome, firefox). "
-             "Helps bypass YouTube rate limiting and bot detection.",
+        "Helps bypass YouTube rate limiting and bot detection.",
     )
 
     # Whisper local transcription fallback
@@ -229,8 +230,13 @@ def main(argv: list[str] | None = None) -> int:
     summaries: list[VideoDownloadSummary] = []
     counts = {"success": 0, "skipped": 0, "failed": 0}
 
-    logger.info("Starting downloads: %d videos | transcripts=%s audio=%s video=%s",
-                total, args.transcripts, args.audio, args.video)
+    logger.info(
+        "Starting downloads: %d videos | transcripts=%s audio=%s video=%s",
+        total,
+        args.transcripts,
+        args.audio,
+        args.video,
+    )
 
     for idx, video in enumerate(videos, 1):
         logger.info("[%d/%d] Processing %s — %s", idx, total, video.id, video.title)
@@ -330,9 +336,7 @@ def main(argv: list[str] | None = None) -> int:
                 tsummary.failed,
             )
         except ImportError:
-            logger.error(
-                "mlx-whisper not installed. Install with: uv pip install mlx-whisper"
-            )
+            logger.error("mlx-whisper not installed. Install with: uv pip install mlx-whisper")
         except Exception as exc:
             logger.error("Whisper transcription failed: %s", exc)
 

@@ -23,6 +23,7 @@ from journal_utilities.youtube.channel import (
 # VideoInfo dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestVideoInfo:
     """Tests for the VideoInfo dataclass."""
 
@@ -56,6 +57,7 @@ class TestVideoInfo:
 # ChannelManifest dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestChannelManifest:
     """Tests for the ChannelManifest dataclass."""
 
@@ -78,6 +80,7 @@ class TestChannelManifest:
 # ---------------------------------------------------------------------------
 # _parse_video_entry
 # ---------------------------------------------------------------------------
+
 
 class TestParseVideoEntry:
     """Tests for _parse_video_entry helper."""
@@ -136,6 +139,7 @@ class TestParseVideoEntry:
 # ---------------------------------------------------------------------------
 # save / load manifest round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestManifestPersistence:
     """Tests for save_channel_manifest and load_channel_manifest."""
@@ -207,6 +211,7 @@ class TestManifestPersistence:
 # ---------------------------------------------------------------------------
 # Real yt-dlp enumeration (network required)
 # ---------------------------------------------------------------------------
+
 
 class TestEnumerateChannelVideosReal:
     """Tests using real yt-dlp to enumerate the Active Inference channel.

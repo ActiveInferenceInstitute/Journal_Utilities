@@ -74,9 +74,7 @@ class Citation(BaseModel):
     type: CitationType = Field(..., description="Type of citation")
     title: str = Field(..., description="Title of the work")
     authors: Sequence[str] = Field(default_factory=list, description="Authors if mentioned")
-    venue: str | None = Field(
-        None, description="Publication venue (journal, conference, etc.)"
-    )
+    venue: str | None = Field(None, description="Publication venue (journal, conference, etc.)")
     year: int | None = Field(None, description="Year of publication if mentioned")
     url: str | None = Field(None, description="URL if explicitly mentioned")
     context: str | None = Field(None, description="Brief context of how it was referenced")
@@ -185,9 +183,7 @@ class ResearchProblem(BaseModel):
     current_approaches: Sequence[str] = Field(
         default_factory=list, description="Current approaches to addressing it"
     )
-    proposed_solution: str | None = Field(
-        None, description="Solution proposed in the presentation"
-    )
+    proposed_solution: str | None = Field(None, description="Solution proposed in the presentation")
 
 
 class ApplicationStatus(str, Enum):
@@ -264,7 +260,9 @@ class Transcript(BaseModel):
     source: str = Field(..., description="Source path or URL of the transcript")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
     processed: bool = Field(default=False, description="Whether entities have been extracted")
-    created_at: datetime = Field(default_factory=datetime.now, description="When record was created")
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="When record was created"
+    )
 
 
 class Entity(BaseModel):

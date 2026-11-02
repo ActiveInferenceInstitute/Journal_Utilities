@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 class DownloadStatus(str, Enum):
     """Status of an individual download operation."""
+
     SUCCESS = "success"
     SKIPPED = "skipped"
     FAILED = "failed"
@@ -28,6 +29,7 @@ class DownloadStatus(str, Enum):
 @dataclass
 class DownloadResult:
     """Result of a single download operation."""
+
     video_id: str
     asset_type: str  # "transcript", "audio", "video"
     status: DownloadStatus
@@ -60,6 +62,7 @@ def _get_file_size(path: Path) -> int:
 @dataclass
 class VideoDownloadSummary:
     """Summary of all downloads for a single video."""
+
     video_id: str
     results: list[DownloadResult] = field(default_factory=list)
     timestamp: str = ""
@@ -86,8 +89,10 @@ def _ytdlp_base_cmd(
     cmd = [
         "yt-dlp",
         "--no-warnings",
-        "--fragment-retries", "3",
-        "--retry-sleep", "fragment:exp=1:10",
+        "--fragment-retries",
+        "3",
+        "--retry-sleep",
+        "fragment:exp=1:10",
         # A modern browser User-Agent is required on every yt-dlp call to
         # avoid YouTube 403s (see AGENTS.md) — not just on the audio path.
         "--user-agent",
@@ -103,6 +108,7 @@ def _ytdlp_base_cmd(
 # ---------------------------------------------------------------------------
 # Transcript download
 # ---------------------------------------------------------------------------
+
 
 def download_transcript(
     video_id: str,
@@ -167,7 +173,9 @@ def download_transcript(
         res.duration_seconds = time.monotonic() - start
         if res.path:
             res.file_size_bytes = _get_file_size(Path(res.path))
-            logger.info("Downloaded transcript (yt-dlp): %s (%s)", Path(res.path).name, res.file_size_str)
+            logger.info(
+                "Downloaded transcript (yt-dlp): %s (%s)", Path(res.path).name, res.file_size_str
+            )
         return res
 
     # Strategy 2: youtube-transcript-api fallback
@@ -194,15 +202,20 @@ def _download_transcript_ytdlp(
     # --write-sub: write subtitle file
     # --write-auto-sub: write automatically generated subtitle file (YouTube)
     cmd = _ytdlp_base_cmd(cookies_from_browser, cookies_file)
-    cmd.extend([
-        "--write-sub",
-        "--write-auto-sub",
-        "--sub-lang", lang_str,
-        "--sub-format", "vtt",  # prefer vtt
-        "--skip-download",
-        "-o", str(transcript_dir / "%(id)s.%(ext)s"),
-        url,
-    ])
+    cmd.extend(
+        [
+            "--write-sub",
+            "--write-auto-sub",
+            "--sub-lang",
+            lang_str,
+            "--sub-format",
+            "vtt",  # prefer vtt
+            "--skip-download",
+            "-o",
+            str(transcript_dir / "%(id)s.%(ext)s"),
+            url,
+        ]
+    )
 
     logger.debug("yt-dlp transcript cmd: %s", " ".join(cmd))
 
@@ -298,14 +311,16 @@ def _download_transcript_api(
         lines = []
         structured = []
         for snippet in fetched:
-            text = snippet.text if hasattr(snippet, 'text') else str(snippet)
+            text = snippet.text if hasattr(snippet, "text") else str(snippet)
             if text:
                 lines.append(text)
-                structured.append({
-                    "text": text,
-                    "start": getattr(snippet, 'start', 0),
-                    "duration": getattr(snippet, 'duration', 0),
-                })
+                structured.append(
+                    {
+                        "text": text,
+                        "start": getattr(snippet, "start", 0),
+                        "duration": getattr(snippet, "duration", 0),
+                    }
+                )
 
         text = "\n".join(lines)
 
@@ -386,6 +401,7 @@ def _convert_vtt_to_text(vtt_path: Path, txt_path: Path) -> None:
 # Audio download
 # ---------------------------------------------------------------------------
 
+
 def download_audio(
     video_id: str,
     output_dir: Path,
@@ -440,13 +456,18 @@ def download_audio(
     start = time.monotonic()
 
     cmd = _ytdlp_base_cmd(cookies_from_browser, cookies_file)
-    cmd.extend([
-        "-x",
-        "--audio-format", audio_format,
-        "--audio-quality", "0",
-        "-o", str(audio_dir / "%(id)s.%(ext)s"),
-        url,
-    ])
+    cmd.extend(
+        [
+            "-x",
+            "--audio-format",
+            audio_format,
+            "--audio-quality",
+            "0",
+            "-o",
+            str(audio_dir / "%(id)s.%(ext)s"),
+            url,
+        ]
+    )
 
     cmd_base = list(cmd)
 
@@ -459,7 +480,10 @@ def download_audio(
         proc = subprocess.run(cmd_web, check=False, timeout=600)
 
         if proc.returncode != 0:
-            logger.warning("Web client download failed (exit code %d). Falling back to ios client.", proc.returncode)
+            logger.warning(
+                "Web client download failed (exit code %d). Falling back to ios client.",
+                proc.returncode,
+            )
 
             # Attempt 2: Fallback to ios client
             cmd_ios = list(cmd_base)
@@ -469,7 +493,10 @@ def download_audio(
             proc = subprocess.run(cmd_ios, check=False, timeout=600)
 
             if proc.returncode != 0:
-                logger.warning("iOS client download failed (exit code %d). Falling back to default client.", proc.returncode)
+                logger.warning(
+                    "iOS client download failed (exit code %d). Falling back to default client.",
+                    proc.returncode,
+                )
 
                 # Attempt 3: Fallback to default client (HLS) with abort-on-unavailable
                 cmd_default = list(cmd_base)
@@ -498,7 +525,6 @@ def download_audio(
             error=f"yt-dlp exited with code {proc.returncode}",
             duration_seconds=elapsed,
         )
-
 
     # yt-dlp may write with different extension before conversion
     found = list(audio_dir.glob(f"{video_id}.*"))
@@ -598,12 +624,17 @@ def download_video(
     start = time.monotonic()
 
     cmd = _ytdlp_base_cmd(cookies_from_browser, cookies_file)
-    cmd.extend([
-        "-f", fmt,
-        "--merge-output-format", "mp4",
-        "-o", str(video_dir / "%(id)s.%(ext)s"),
-        url,
-    ])
+    cmd.extend(
+        [
+            "-f",
+            fmt,
+            "--merge-output-format",
+            "mp4",
+            "-o",
+            str(video_dir / "%(id)s.%(ext)s"),
+            url,
+        ]
+    )
 
     logger.debug("yt-dlp video cmd: %s", " ".join(cmd))
 
@@ -662,6 +693,7 @@ def download_video(
 # Combined download
 # ---------------------------------------------------------------------------
 
+
 def download_all(
     video_id: str,
     output_dir: Path,
@@ -695,7 +727,8 @@ def download_all(
 
     if transcripts:
         result = download_transcript(
-            video_id, output_dir,
+            video_id,
+            output_dir,
             languages=transcript_languages,
             skip_existing=skip_existing,
             cookies_from_browser=cookies_from_browser,
@@ -703,13 +736,15 @@ def download_all(
         summary.results.append(result)
         logger.info(
             "Transcript for %s: %s%s",
-            video_id, result.status.value,
+            video_id,
+            result.status.value,
             f" ({result.error})" if result.error else "",
         )
 
     if audio:
         result = download_audio(
-            video_id, output_dir,
+            video_id,
+            output_dir,
             audio_format=audio_format,
             skip_existing=skip_existing,
             cookies_from_browser=cookies_from_browser,
@@ -717,13 +752,15 @@ def download_all(
         summary.results.append(result)
         logger.info(
             "Audio for %s: %s%s",
-            video_id, result.status.value,
+            video_id,
+            result.status.value,
             f" ({result.error})" if result.error else "",
         )
 
     if video:
         result = download_video(
-            video_id, output_dir,
+            video_id,
+            output_dir,
             quality=video_quality,
             skip_existing=skip_existing,
             cookies_from_browser=cookies_from_browser,
@@ -731,7 +768,8 @@ def download_all(
         summary.results.append(result)
         logger.info(
             "Video for %s: %s%s",
-            video_id, result.status.value,
+            video_id,
+            result.status.value,
             f" ({result.error})" if result.error else "",
         )
 
@@ -741,6 +779,7 @@ def download_all(
 # ---------------------------------------------------------------------------
 # Download manifest persistence
 # ---------------------------------------------------------------------------
+
 
 def save_download_manifest(
     summaries: list[VideoDownloadSummary],

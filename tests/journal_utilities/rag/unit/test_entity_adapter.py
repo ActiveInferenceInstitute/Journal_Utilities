@@ -23,11 +23,7 @@ class TestConvertCoreEntities:
     def test_convert_empty_entities(self):
         """Test converting empty core entities."""
         core = CoreEntities(
-            concepts=[],
-            researchers=[],
-            citations=[],
-            technical_terms=[],
-            key_insights=[]
+            concepts=[], researchers=[], citations=[], technical_terms=[], key_insights=[]
         )
 
         entities = EntityAdapter.convert_core_entities(core)
@@ -42,13 +38,13 @@ class TestConvertCoreEntities:
                     name="Active Inference",
                     definition="A framework for understanding brain function",
                     category=ConceptCategory.THEORETICAL,
-                    related_concepts=["Free Energy"]
+                    related_concepts=["Free Energy"],
                 )
             ],
             researchers=[],
             citations=[],
             technical_terms=[],
-            key_insights=[]
+            key_insights=[],
         )
 
         entities = EntityAdapter.convert_core_entities(core)
@@ -63,15 +59,11 @@ class TestConvertCoreEntities:
         core = CoreEntities(
             concepts=[],
             researchers=[
-                Researcher(
-                    name="Karl Friston",
-                    role=ResearcherRole.CITED_AUTHOR,
-                    affiliation="UCL"
-                )
+                Researcher(name="Karl Friston", role=ResearcherRole.CITED_AUTHOR, affiliation="UCL")
             ],
             citations=[],
             technical_terms=[],
-            key_insights=[]
+            key_insights=[],
         )
 
         entities = EntityAdapter.convert_core_entities(core)
@@ -91,11 +83,11 @@ class TestConvertCoreEntities:
                     title="The Free Energy Principle",
                     type=CitationType.PAPER,
                     authors=["Friston, K."],
-                    year=2010
+                    year=2010,
                 )
             ],
             technical_terms=[],
-            key_insights=[]
+            key_insights=[],
         )
 
         entities = EntityAdapter.convert_core_entities(core)
@@ -115,10 +107,10 @@ class TestConvertCoreEntities:
                 TechnicalTerm(
                     term="Variational Free Energy",
                     explanation="A bound on surprise",
-                    domain=TermDomain.MATHEMATICS
+                    domain=TermDomain.MATHEMATICS,
                 )
             ],
-            key_insights=[]
+            key_insights=[],
         )
 
         entities = EntityAdapter.convert_core_entities(core)
@@ -135,7 +127,7 @@ class TestConvertCoreEntities:
             researchers=[],
             citations=[],
             technical_terms=[],
-            key_insights=["Active Inference unifies perception and action"]
+            key_insights=["Active Inference unifies perception and action"],
         )
 
         entities = EntityAdapter.convert_core_entities(core)
@@ -151,11 +143,17 @@ class TestConvertCoreEntities:
     def test_convert_all_types(self):
         """Test converting all entity types together."""
         core = CoreEntities(
-            concepts=[Concept(name="Concept1", definition="Def1", category=ConceptCategory.THEORETICAL)],
+            concepts=[
+                Concept(name="Concept1", definition="Def1", category=ConceptCategory.THEORETICAL)
+            ],
             researchers=[Researcher(name="Researcher1", role=ResearcherRole.SPEAKER)],
-            citations=[Citation(title="Citation1", authors=["A"], year=2020, type=CitationType.PAPER)],
-            technical_terms=[TechnicalTerm(term="Term1", explanation="Exp1", domain=TermDomain.NEUROSCIENCE)],
-            key_insights=["Insight1"]
+            citations=[
+                Citation(title="Citation1", authors=["A"], year=2020, type=CitationType.PAPER)
+            ],
+            technical_terms=[
+                TechnicalTerm(term="Term1", explanation="Exp1", domain=TermDomain.NEUROSCIENCE)
+            ],
+            key_insights=["Insight1"],
         )
 
         entities = EntityAdapter.convert_core_entities(core)
@@ -177,11 +175,7 @@ class TestExtractRelationships:
     def test_extract_relationships_empty(self):
         """Test extracting relationships from empty entities."""
         core = CoreEntities(
-            concepts=[],
-            researchers=[],
-            citations=[],
-            technical_terms=[],
-            key_insights=[]
+            concepts=[], researchers=[], citations=[], technical_terms=[], key_insights=[]
         )
 
         relationships = EntityAdapter.extract_relationships(core)
@@ -196,13 +190,13 @@ class TestExtractRelationships:
                     name="Active Inference",
                     definition="Test",
                     category=ConceptCategory.THEORETICAL,
-                    related_concepts=["Free Energy", "Perception"]
+                    related_concepts=["Free Energy", "Perception"],
                 )
             ],
             researchers=[],
             citations=[],
             technical_terms=[],
-            key_insights=[]
+            key_insights=[],
         )
 
         relationships = EntityAdapter.extract_relationships(core)
@@ -222,7 +216,7 @@ class TestEntityModel:
             description="A test",
             confidence=0.95,
             mentions=3,
-            context=["ctx1", "ctx2"]
+            context=["ctx1", "ctx2"],
         )
 
         assert entity.name == "Test Entity"
@@ -233,13 +227,7 @@ class TestEntityModel:
 
     def test_entity_default_values(self):
         """Test entity has sensible defaults."""
-        entity = Entity(
-            name="Minimal",
-            type="concept",
-            confidence=0.8,
-            mentions=1,
-            context=[]
-        )
+        entity = Entity(name="Minimal", type="concept", confidence=0.8, mentions=1, context=[])
 
         assert entity.description == ""
         assert entity.metadata == {}
@@ -252,7 +240,7 @@ class TestEntityModel:
             confidence=0.9,
             mentions=1,
             context=["test"],
-            metadata={"source": "transcript", "importance": "high"}
+            metadata={"source": "transcript", "importance": "high"},
         )
 
         assert entity.metadata["source"] == "transcript"

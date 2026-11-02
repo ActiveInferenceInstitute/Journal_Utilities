@@ -17,11 +17,16 @@ from apply_speaker_names import (
 
 
 def _blocks(vid="vid00000001", speakers=("SPEAKER_00", "SPEAKER_01")):
-    return [{"video_id": vid, "segments": [
-        {"start": 0.0, "end": 1.0, "text": "hello there", "speaker": speakers[0]},
-        {"start": 1.0, "end": 2.0, "text": "hi back", "speaker": speakers[1]},
-        {"start": 2.0, "end": 3.0, "text": "more from me", "speaker": speakers[1]},
-    ]}]
+    return [
+        {
+            "video_id": vid,
+            "segments": [
+                {"start": 0.0, "end": 1.0, "text": "hello there", "speaker": speakers[0]},
+                {"start": 1.0, "end": 2.0, "text": "hi back", "speaker": speakers[1]},
+                {"start": 2.0, "end": 3.0, "text": "more from me", "speaker": speakers[1]},
+            ],
+        }
+    ]
 
 
 def _meta(vid="vid00000001", speakers=None):
@@ -40,8 +45,7 @@ class TestRenderTxt:
         assert unmapped == {"SPEAKER_01"}
 
     def test_same_name_labels_merge(self):
-        txt, _ = render_txt(_blocks(), _meta(
-            speakers={"SPEAKER_00": "Ada", "SPEAKER_01": "Ada"}))
+        txt, _ = render_txt(_blocks(), _meta(speakers={"SPEAKER_00": "Ada", "SPEAKER_01": "Ada"}))
         assert txt.count("Ada:") == 1
 
     def test_multi_block_headers(self):
@@ -98,8 +102,7 @@ class TestProcessItem:
         item = self._item(tmp_path, "caption prose without speakers\n")
         result = process_item(item, _meta(), apply=True)
         assert result["action"] == "upgrade+salvage"
-        assert (item / "captions" / SALVAGE_NAME).read_text() \
-            == "caption prose without speakers\n"
+        assert (item / "captions" / SALVAGE_NAME).read_text() == "caption prose without speakers\n"
         assert (item / "transcript.txt").read_text().startswith("SPEAKER_00:")
 
     def test_idempotent_second_run(self, tmp_path):

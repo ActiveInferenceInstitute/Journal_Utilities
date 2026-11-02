@@ -129,9 +129,7 @@ def transcribe_audio(
         )
 
     except ImportError:
-        logger.error(
-            "mlx-whisper not installed. Install with: uv pip install mlx-whisper"
-        )
+        logger.error("mlx-whisper not installed. Install with: uv pip install mlx-whisper")
         return TranscriptionResult(
             video_id=video_id,
             status=TranscriptionStatus.FAILED,
@@ -171,7 +169,9 @@ def find_missing_transcripts(
 
     existing_transcripts = set()
     if transcript_dir.exists():
-        existing_transcripts = {p.stem for p in transcript_dir.glob("*.txt") if p.stat().st_size > 0}
+        existing_transcripts = {
+            p.stem for p in transcript_dir.glob("*.txt") if p.stat().st_size > 0
+        }
 
     missing: list[Path] = []
     if not audio_dir.exists():
@@ -181,7 +181,10 @@ def find_missing_transcripts(
     audio_files = sorted(audio_dir.iterdir())
     total_audio = sum(1 for f in audio_files if f.suffix.lower() in audio_extensions)
     for audio_file in audio_files:
-        if audio_file.suffix.lower() in audio_extensions and audio_file.stem not in existing_transcripts:
+        if (
+            audio_file.suffix.lower() in audio_extensions
+            and audio_file.stem not in existing_transcripts
+        ):
             missing.append(audio_file)
 
     logger.info(

@@ -60,9 +60,7 @@ def sample_data_dir(tmp_path: Path) -> Path:
             },
         ],
     }
-    (data_dir / "channel_videos.json").write_text(
-        json.dumps(manifest, indent=2), encoding="utf-8"
-    )
+    (data_dir / "channel_videos.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     # Create transcript files
     transcripts_dir = data_dir / "transcripts"
@@ -377,9 +375,7 @@ class TestSearchEndpointAdditional:
 
     def test_search_no_results(self, test_client: TestClient):
         """Search for non-existent term returns empty results."""
-        resp = test_client.get(
-            "/api/search", params={"q": "xyznonexistent12345"}
-        )
+        resp = test_client.get("/api/search", params={"q": "xyznonexistent12345"})
         assert resp.status_code == 200
         assert len(resp.json().get("results", [])) == 0
 
@@ -414,5 +410,3 @@ class TestChatEndpointsAdditional:
             json={"session_id": "s", "message": "x" * 40_000},
         )
         assert resp.status_code == 413
-
-

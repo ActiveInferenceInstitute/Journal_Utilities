@@ -13,9 +13,10 @@ def mock_search_index():
     index = MagicMock()
     index.get_context_chunks.return_value = [
         {"video_id": "v1", "text": "This is a transcript excerpt."},
-        {"video_id": "v2", "text": "Another excerpt here."}
+        {"video_id": "v2", "text": "Another excerpt here."},
     ]
     return index
+
 
 @pytest.mark.asyncio
 async def test_chat_success(mock_search_index):
@@ -26,7 +27,9 @@ async def test_chat_success(mock_search_index):
         mock_post = AsyncMock()
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"message": {"content": "Hello! I can help you with that."}}
+        mock_response.json.return_value = {
+            "message": {"content": "Hello! I can help you with that."}
+        }
         mock_post.return_value = mock_response
 
         mock_client.return_value.__aenter__.return_value.post = mock_post
@@ -48,6 +51,7 @@ async def test_chat_success(mock_search_index):
         last_msg = messages[-1]["content"]
         assert "This is a transcript excerpt." in last_msg
         assert "User question: What is this?" in last_msg
+
 
 @pytest.mark.asyncio
 async def test_chat_stream_success(mock_search_index):
@@ -82,12 +86,13 @@ async def test_chat_stream_success(mock_search_index):
         assert 'type": "context"' in chunks[0]
         # 2. Token 1
         assert 'type": "token"' in chunks[1]
-        assert 'Hello' in chunks[1]
+        assert "Hello" in chunks[1]
         # 3. Token 2
         assert 'type": "token"' in chunks[2]
-        assert ' world' in chunks[2]
+        assert " world" in chunks[2]
         # 4. Done
         assert 'type": "done"' in chunks[3]
+
 
 @pytest.mark.asyncio
 async def test_chat_error_handling(mock_search_index):
