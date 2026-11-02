@@ -64,6 +64,14 @@ No YouTube writes anywhere in this module (handoff Rules 1/2).
 - Failed or skipped extractions (past `--max-new`, network error, malformed
   JSON) leave that video `unknown`; it is still listed in the worklist, with a
   warning, and must not be treated as published.
+- A **future premiere normally lands as `unknown`, not `scheduled`**: yt-dlp
+  cannot extract an upcoming live event at all — it exits with "This live event
+  will begin in N days" — so nothing is known about its privacy/broadcast state
+  and the field is recorded `unknown`. The run log shows `[unknown]` for it, and
+  a later run resolves the video once it has aired. `scheduled` is recorded only
+  when an extraction succeeds and reports `live_status: "is_upcoming"` (the
+  Data API path reports upcoming broadcasts directly). Never turn the error
+  text into a status: `unknown` is the honest answer.
 - `published_at` is only set from a date the source actually reported
   (`upload_date` on the flat pass, `timestamp`/`release_timestamp` from a full
   extraction); an absent/garbled date stays empty.
