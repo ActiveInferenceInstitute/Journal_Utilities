@@ -296,9 +296,10 @@ def _download_transcript_api(
                 session = requests.Session()
                 cj = http.cookiejar.MozillaCookieJar(cookies_path)
                 cj.load(ignore_discard=True, ignore_expires=True)
-                # MozillaCookieJar is a CookieJar, not a RequestsCookieJar;
-                # requests accepts it at runtime, but the types differ.
-                session.cookies = cj
+                # Copy the loaded cookies into the session's own RequestsCookieJar;
+                # requests accepts a plain CookieJar only at runtime, while
+                # RequestsCookieJar.update() takes a CookieJar by contract.
+                session.cookies.update(cj)
                 logger.debug("Loaded cookies for transcript API from %s", cookies_path)
             except Exception as e:
                 logger.warning("Failed to load cookies from %s: %s", cookies_path, e)
