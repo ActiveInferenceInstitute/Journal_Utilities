@@ -431,8 +431,14 @@ class DataLoader:
         # Sort. Only known sort keys are accepted (the client passes an
         # arbitrary attribute name — anything else silently fell back to "").
         sort_fields = {
-            "upload_date", "title", "category", "video_id",
-            "duration", "view_count", "transcript_size", "audio_size",
+            "upload_date",
+            "title",
+            "category",
+            "video_id",
+            "duration",
+            "view_count",
+            "transcript_size",
+            "audio_size",
         }
         numeric_fields = {"duration", "view_count", "transcript_size", "audio_size"}
         if sort_by not in sort_fields:

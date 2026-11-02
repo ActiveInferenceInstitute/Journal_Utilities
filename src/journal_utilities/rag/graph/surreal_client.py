@@ -164,6 +164,7 @@ class SurrealDBClient:
             else:
                 # Create new entity
                 from datetime import datetime
+
                 payload = {
                     "name": entity.name,
                     "type": entity_type,
@@ -386,9 +387,7 @@ class SurrealDBClient:
             raise RuntimeError("Database not connected")
 
         try:
-            result = await self.db.query(
-                "SELECT source FROM transcript WHERE processed = false"
-            )
+            result = await self.db.query("SELECT source FROM transcript WHERE processed = false")
 
             if result and result[0]["result"]:
                 return [rec["source"] for rec in result[0]["result"] if rec.get("source")]
@@ -410,7 +409,9 @@ class SurrealDBClient:
 
         try:
             await self.db.update(transcript_id, {"processed": processed})
-            logger.debug("Updated transcript status", transcript_id=transcript_id, processed=processed)
+            logger.debug(
+                "Updated transcript status", transcript_id=transcript_id, processed=processed
+            )
 
         except Exception as e:
             logger.error(

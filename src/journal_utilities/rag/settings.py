@@ -1,6 +1,5 @@
 """Settings management for JournalRAG."""
 
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

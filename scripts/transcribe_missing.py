@@ -84,7 +84,8 @@ def parse_args() -> argparse.Namespace:
         help="Only list missing transcripts without transcribing",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Enable debug logging",
     )

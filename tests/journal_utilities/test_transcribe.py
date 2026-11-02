@@ -46,7 +46,9 @@ class TestOutputText:
         output_result = transcription_service.output_text(input_data)
         assert output_result == expected_output
 
-    def test_output_text_multiple_speakers(self, transcription_service: TranscriptionService) -> None:
+    def test_output_text_multiple_speakers(
+        self, transcription_service: TranscriptionService
+    ) -> None:
         """Test output_text with multiple speakers."""
         input_data = [
             {"text": " Hello everyone.", "speaker": "SPEAKER_00"},
@@ -80,7 +82,9 @@ class TestOutputText:
         output_result = transcription_service.output_text(input_data)
         assert output_result == ""
 
-    def test_output_text_mixed_empty_and_content(self, transcription_service: TranscriptionService) -> None:
+    def test_output_text_mixed_empty_and_content(
+        self, transcription_service: TranscriptionService
+    ) -> None:
         """Test output_text with mix of empty and content segments."""
         input_data = [
             {"text": " Hello.", "speaker": "SPEAKER_00"},
@@ -100,7 +104,7 @@ class TestRemoveWords:
         input_data = {
             "text": "Hello",
             "words": [{"word": "Hello", "start": 0.0, "end": 0.5}],
-            "speaker": "SPEAKER_00"
+            "speaker": "SPEAKER_00",
         }
         result = transcription_service.remove_words(input_data)
         assert "words" not in result
@@ -121,10 +125,8 @@ class TestRemoveWords:
     def test_remove_words_nested(self, transcription_service: TranscriptionService) -> None:
         """Test removing 'words' from nested structures."""
         input_data = {
-            "segments": [
-                {"text": "Hello", "words": [{"word": "Hello"}]}
-            ],
-            "words": ["should", "be", "removed"]
+            "segments": [{"text": "Hello", "words": [{"word": "Hello"}]}],
+            "words": ["should", "be", "removed"],
         }
         result = transcription_service.remove_words(input_data)
         assert "words" not in result
@@ -147,18 +149,13 @@ class TestSimplifyTranscript:
 
     def test_simplify_transcript_basic(self, transcription_service: TranscriptionService) -> None:
         """Test simplify_transcript removes words arrays."""
-        detailed = {
-            "segments": [
-                {
-                    "text": "Hello",
-                    "words": [{"word": "Hello", "start": 0.0}]
-                }
-            ]
-        }
+        detailed = {"segments": [{"text": "Hello", "words": [{"word": "Hello", "start": 0.0}]}]}
         result = transcription_service.simplify_transcript(detailed)
         assert "words" not in result.get("segments", [{}])[0]
 
-    def test_simplify_transcript_preserves_other_fields(self, transcription_service: TranscriptionService) -> None:
+    def test_simplify_transcript_preserves_other_fields(
+        self, transcription_service: TranscriptionService
+    ) -> None:
         """Test simplify_transcript keeps non-words fields."""
         detailed = [
             {
@@ -166,7 +163,7 @@ class TestSimplifyTranscript:
                 "start": 0.0,
                 "end": 1.0,
                 "speaker": "SPEAKER_00",
-                "words": [{"word": "Hello"}]
+                "words": [{"word": "Hello"}],
             }
         ]
         result = transcription_service.simplify_transcript(detailed)
@@ -192,10 +189,7 @@ class TestTranscriptionServiceInit:
             mock_diarize.return_value = MagicMock()
 
             service = TranscriptionService(
-                hf_token="my_token",
-                device="cuda",
-                batch_size=16,
-                compute_type="float16"
+                hf_token="my_token", device="cuda", batch_size=16, compute_type="float16"
             )
 
             assert service.hf_token == "my_token"
@@ -214,12 +208,7 @@ class TestTranscriptionServiceInit:
             mock_align_model.return_value = (MagicMock(), MagicMock())
             mock_diarize.return_value = MagicMock()
 
-            TranscriptionService(
-                hf_token="token",
-                device="cpu",
-                batch_size=1,
-                compute_type="int8"
-            )
+            TranscriptionService(hf_token="token", device="cpu", batch_size=1, compute_type="int8")
 
             mock_load_model.assert_called_once()
             mock_align_model.assert_called_once()

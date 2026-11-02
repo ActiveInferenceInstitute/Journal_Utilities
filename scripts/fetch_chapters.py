@@ -43,8 +43,13 @@ def main() -> int:
 
     # sleep_interval_requests keeps us under YouTube's metadata rate limit;
     # a full-channel sweep without it gets blocked partway ("try again later").
-    opts = {"quiet": True, "no_warnings": True, "skip_download": True,
-            "extract_flat": False, "sleep_interval_requests": 2}
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": False,
+        "sleep_interval_requests": 2,
+    }
     fetched = failed = 0
     with yt_dlp.YoutubeDL(opts) as ydl:
         for i, video in enumerate(todo, 1):
@@ -52,7 +57,10 @@ def main() -> int:
             try:
                 info = ydl.extract_info(f"https://www.youtube.com/watch?v={vid}", download=False)
                 chapters = [
-                    {"start": float(c.get("start_time") or 0), "title": (c.get("title") or "").strip()}
+                    {
+                        "start": float(c.get("start_time") or 0),
+                        "title": (c.get("title") or "").strip(),
+                    }
                     for c in (info.get("chapters") or [])
                 ]
                 cache[vid] = chapters
@@ -67,8 +75,13 @@ def main() -> int:
 
     CACHE.write_text(json.dumps(cache, ensure_ascii=False) + "\n", encoding="utf-8")
     with_chapters = sum(1 for c in cache.values() if c)
-    logger.info("done: %d fetched, %d failed; cache %d videos (%d with chapters)",
-                fetched, failed, len(cache), with_chapters)
+    logger.info(
+        "done: %d fetched, %d failed; cache %d videos (%d with chapters)",
+        fetched,
+        failed,
+        len(cache),
+        with_chapters,
+    )
     return 0
 
 

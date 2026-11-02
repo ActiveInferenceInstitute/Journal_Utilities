@@ -75,8 +75,17 @@ def classify(rel_parts: list[str], name: str) -> str:
 # Content-based detection captures stream items AND non-standard names (symposium
 # years, "End of 2023 Review", course Lecture_N) without relying on a name pattern.
 TEMPLATE_SUBDIRS = {
-    "Metadata", "Transcripts", "Captions", "Translations", "Audio", "Video",
-    "Images", "Prose", "Appendices", "Bibliographic Information", "HTML",
+    "Metadata",
+    "Transcripts",
+    "Captions",
+    "Translations",
+    "Audio",
+    "Video",
+    "Images",
+    "Prose",
+    "Appendices",
+    "Bibliographic Information",
+    "HTML",
 }
 
 
@@ -123,7 +132,9 @@ def analyze(journal: Path) -> dict:
                 unmapped.append(str(f.relative_to(journal)))
             elif cat == "AUDIO":
                 audio.append(str(f.relative_to(journal)))
-        per_item.append({"item": str(item.relative_to(journal)), "files": len(files), "by_cat": dict(item_cats)})
+        per_item.append(
+            {"item": str(item.relative_to(journal)), "files": len(files), "by_cat": dict(item_cats)}
+        )
     return {
         "items": len(items),
         "total_files": sum(cats.values()),
@@ -186,8 +197,14 @@ def build_item(item: Path, journal: Path, out_dir: Path, titles: dict, audio_out
         cat = classify(relparts, f.name)
         vid = _video_id(f.name)
         if vid:
-            parts.setdefault(vid, {"video_id": vid, "url": f"https://www.youtube.com/watch?v={vid}",
-                                   "title": titles.get(vid, "")})
+            parts.setdefault(
+                vid,
+                {
+                    "video_id": vid,
+                    "url": f"https://www.youtube.com/watch?v={vid}",
+                    "title": titles.get(vid, ""),
+                },
+            )
         if cat == "DROP":
             dropped += 1
         elif cat == "transcript_txt":
@@ -210,32 +227,56 @@ def build_item(item: Path, journal: Path, out_dir: Path, titles: dict, audio_out
             _copy(f, _unique(dest / cat, f.name, relparts))
             moved += 1
 
-    cat_, ser_, ep_ = categorize_name(titles.get(next(iter(parts), ""), "") or item.name, is_unique_event_name=False)
+    cat_, ser_, ep_ = categorize_name(
+        titles.get(next(iter(parts), ""), "") or item.name, is_unique_event_name=False
+    )
     meta = {
-        "series": series, "item": item.name, "source": "youtube", "channel": "ActiveInferenceInstitute",
-        "category": cat_, "episode": ep_,
+        "series": series,
+        "item": item.name,
+        "source": "youtube",
+        "channel": "ActiveInferenceInstitute",
+        "category": cat_,
+        "episode": ep_,
         "parts": sorted(parts.values(), key=lambda p: p["video_id"]),
     }
-    (dest / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    (dest / "metadata.json").write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     if transcript_txt:
-        body = "\n\n".join(f"## {vid}\n\n{txt.strip()}" for vid, txt in transcript_txt if txt.strip())
+        body = "\n\n".join(
+            f"## {vid}\n\n{txt.strip()}" for vid, txt in transcript_txt if txt.strip()
+        )
         (dest / "transcript.txt").write_text(body, encoding="utf-8")
     if transcript_json:
-        (dest / "transcript.json").write_text(json.dumps(transcript_json, ensure_ascii=False), encoding="utf-8")
+        (dest / "transcript.json").write_text(
+            json.dumps(transcript_json, ensure_ascii=False), encoding="utf-8"
+        )
     # README
     lines = [f"# {item.name}", "", f"Series: **{series}**", ""]
     for p in meta["parts"]:
         t = p["title"] or "(untitled)"
         lines.append(f"- [{t}]({p['url']}) — `{p['video_id']}`")
-    lines += ["", "Contents: " + ", ".join(sorted({d.name for d in dest.iterdir() if d.is_dir()}) or ["—"]) + "."]
+    lines += [
+        "",
+        "Contents: "
+        + ", ".join(sorted({d.name for d in dest.iterdir() if d.is_dir()}) or ["—"])
+        + ".",
+    ]
     (dest / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    return {"item": str(rel), "parts": len(parts), "moved": moved, "dropped": dropped,
-            "transcripts": len(transcript_txt), "audio": len(audio_files)}
+    return {
+        "item": str(rel),
+        "parts": len(parts),
+        "moved": moved,
+        "dropped": dropped,
+        "transcripts": len(transcript_txt),
+        "audio": len(audio_files),
+    }
 
 
 def _copy(src: Path, dst: Path) -> None:
     import shutil
+
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
 
@@ -290,13 +331,17 @@ def build_v2(journal: Path, out_dir: Path, audio_out: Path) -> dict:
     # JU transcript but no curated item get a generated item, categorized by title.
     generated = _build_uncovered(journal, out_dir, titles, item_paths)
 
-    return {"items": len(records) + generated, "curated_items": len(records),
-            "generated_items": generated, "titles_known": len(titles),
-            "total_moved": sum(r["moved"] for r in records),
-            "total_dropped": sum(r["dropped"] for r in records),
-            "total_audio": sum(r["audio"] for r in records),
-            "passthrough": passthrough,
-            "with_transcript": sum(1 for r in records if r["transcripts"])}
+    return {
+        "items": len(records) + generated,
+        "curated_items": len(records),
+        "generated_items": generated,
+        "titles_known": len(titles),
+        "total_moved": sum(r["moved"] for r in records),
+        "total_dropped": sum(r["dropped"] for r in records),
+        "total_audio": sum(r["audio"] for r in records),
+        "passthrough": passthrough,
+        "with_transcript": sum(1 for r in records if r["transcripts"]),
+    }
 
 
 def _build_uncovered(journal: Path, out_dir: Path, titles: dict, item_paths: list) -> int:
@@ -338,19 +383,35 @@ def _build_uncovered(journal: Path, out_dir: Path, titles: dict, item_paths: lis
         dest = out_dir / SRC_PREFIX / series / item
         dest.mkdir(parents=True, exist_ok=True)
         meta = {
-            "series": series, "item": item, "source": "youtube", "channel": "ActiveInferenceInstitute",
-            "category": cat, "episode": ep,
-            "parts": [{"video_id": vid, "url": v.get("url", f"https://www.youtube.com/watch?v={vid}"),
-                       "title": v.get("title", ""), "duration": v.get("duration"),
-                       "upload_date": v.get("upload_date", "")}],
+            "series": series,
+            "item": item,
+            "source": "youtube",
+            "channel": "ActiveInferenceInstitute",
+            "category": cat,
+            "episode": ep,
+            "parts": [
+                {
+                    "video_id": vid,
+                    "url": v.get("url", f"https://www.youtube.com/watch?v={vid}"),
+                    "title": v.get("title", ""),
+                    "duration": v.get("duration"),
+                    "upload_date": v.get("upload_date", ""),
+                }
+            ],
         }
-        (dest / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+        (dest / "metadata.json").write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         tx = tx_dir / f"{vid}.txt"
         if tx.exists():
-            (dest / "transcript.txt").write_text(tx.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+            (dest / "transcript.txt").write_text(
+                tx.read_text(encoding="utf-8", errors="replace"), encoding="utf-8"
+            )
         (dest / "README.md").write_text(
             f"# {item}\n\nSeries: **{series}**\n\n- [{v.get('title') or '(untitled)'}]"
-            f"({v.get('url', '')}) — `{vid}`\n", encoding="utf-8")
+            f"({v.get('url', '')}) — `{vid}`\n",
+            encoding="utf-8",
+        )
         covered.add(vid)
         generated += 1
     return generated
@@ -358,11 +419,25 @@ def _build_uncovered(journal: Path, out_dir: Path, titles: dict, item_paths: lis
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--journal", type=Path, default=Path(__file__).resolve().parent.parent.parent / "ActiveInferenceJournal")
-    ap.add_argument("--build", type=Path, default=None, help="build v2 staging tree at this path (out-of-place)")
-    ap.add_argument("--audio-out", type=Path, default=None, help="collect audio files here (for the audio branch)")
-    ap.add_argument("--apply", action="store_true",
-                    help="DEPRECATED: in-place apply is not performed; use --build + validation")
+    ap.add_argument(
+        "--journal",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent.parent / "ActiveInferenceJournal",
+    )
+    ap.add_argument(
+        "--build", type=Path, default=None, help="build v2 staging tree at this path (out-of-place)"
+    )
+    ap.add_argument(
+        "--audio-out",
+        type=Path,
+        default=None,
+        help="collect audio files here (for the audio branch)",
+    )
+    ap.add_argument(
+        "--apply",
+        action="store_true",
+        help="DEPRECATED: in-place apply is not performed; use --build + validation",
+    )
     ap.add_argument("--report", type=Path, default=None, help="write full JSON plan here")
     args = ap.parse_args()
 

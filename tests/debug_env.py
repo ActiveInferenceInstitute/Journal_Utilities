@@ -1,4 +1,3 @@
-
 import os
 import sys
 
@@ -11,6 +10,7 @@ def test_debug_env():
 
     try:
         import pyytdata
+
         print(f"Successfully imported pyytdata from {pyytdata.__file__}")
     except ImportError as e:
         print(f"Failed to import pyytdata: {e}")

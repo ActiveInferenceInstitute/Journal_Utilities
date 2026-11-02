@@ -76,9 +76,7 @@ class TestFindMissingTranscripts:
 
     def test_nonexistent_audio_dir(self, tmp_path: Path) -> None:
         """When audio dir doesn't exist, returns empty list."""
-        missing = find_missing_transcripts(
-            tmp_path / "nonexistent", tmp_path / "transcripts"
-        )
+        missing = find_missing_transcripts(tmp_path / "nonexistent", tmp_path / "transcripts")
         assert len(missing) == 0
 
     def test_ignores_non_audio_files(self, tmp_path: Path) -> None:
@@ -173,4 +171,3 @@ class TestTranscribeMissing:
             assert summary.total == 2
             assert summary.success == 2
             assert mock_transcribe.call_count == 2
-

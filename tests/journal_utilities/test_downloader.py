@@ -42,6 +42,7 @@ live_youtube = pytest.mark.skipif(
 # DownloadResult / DownloadStatus
 # ---------------------------------------------------------------------------
 
+
 class TestDownloadResult:
     """Tests for the DownloadResult dataclass."""
 
@@ -104,6 +105,7 @@ class TestVideoDownloadSummary:
 # ---------------------------------------------------------------------------
 # VTT to text conversion (real file I/O)
 # ---------------------------------------------------------------------------
+
 
 class TestConvertVttToText:
     """Tests for _convert_vtt_to_text helper. Uses real file operations."""
@@ -211,6 +213,7 @@ Actual content
 # Skip-if-exists logic (real file I/O, no network)
 # ---------------------------------------------------------------------------
 
+
 class TestSkipExisting:
     """Tests for skip-if-exists logic using real file operations."""
 
@@ -248,6 +251,7 @@ class TestSkipExisting:
 # ---------------------------------------------------------------------------
 # Download manifest persistence (real file I/O)
 # ---------------------------------------------------------------------------
+
 
 class TestDownloadManifest:
     """Tests for save/load download manifest using real file operations."""
@@ -302,6 +306,7 @@ class TestDownloadManifest:
 # ---------------------------------------------------------------------------
 # Real transcript download (network required)
 # ---------------------------------------------------------------------------
+
 
 @live_youtube
 class TestRealTranscriptDownload:
@@ -385,6 +390,7 @@ class TestRealTranscriptDownload:
 # Real audio download (network required)
 # ---------------------------------------------------------------------------
 
+
 @live_youtube
 class TestRealAudioDownload:
     """Real audio download tests using yt-dlp (mocked for stability)."""
@@ -401,7 +407,9 @@ class TestRealAudioDownload:
             expected_file = audio_dir / f"{KNOWN_VIDEO_ID}.mp3"
             expected_file.write_bytes(b"fake audio data")  # non-empty, like a real download
 
-            result = download_audio(KNOWN_VIDEO_ID, tmp_path, audio_format="mp3", skip_existing=False)
+            result = download_audio(
+                KNOWN_VIDEO_ID, tmp_path, audio_format="mp3", skip_existing=False
+            )
 
             assert result.status == DownloadStatus.SUCCESS
             assert result.path == str(expected_file)
@@ -422,13 +430,16 @@ class TestRealAudioDownload:
             download_audio(KNOWN_VIDEO_ID, tmp_path, audio_format="mp3", skip_existing=False)
 
             # Second download (should skip)
-            result2 = download_audio(KNOWN_VIDEO_ID, tmp_path, audio_format="mp3", skip_existing=True)
+            result2 = download_audio(
+                KNOWN_VIDEO_ID, tmp_path, audio_format="mp3", skip_existing=True
+            )
             assert result2.status == DownloadStatus.SKIPPED
 
 
 # ---------------------------------------------------------------------------
 # Real combined download (network required)
 # ---------------------------------------------------------------------------
+
 
 @live_youtube
 class TestRealDownloadAll:

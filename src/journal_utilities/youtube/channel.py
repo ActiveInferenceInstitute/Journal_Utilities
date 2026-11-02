@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class VideoInfo:
     """Metadata for a single YouTube video."""
+
     id: str
     title: str = ""
     upload_date: str = ""
@@ -37,6 +38,7 @@ class VideoInfo:
 @dataclass
 class ChannelManifest:
     """Manifest of all videos on a YouTube channel."""
+
     channel_id: str
     channel_url: str = ""
     enumerated_at: str = ""
@@ -116,7 +118,9 @@ def enumerate_channel_videos(
             logger.warning("yt-dlp timed out enumerating %s", url)
             continue
         if result.returncode != 0 and not result.stdout.strip():
-            logger.warning("yt-dlp tab %s failed (exit %d): %s", url, result.returncode, result.stderr[:200])
+            logger.warning(
+                "yt-dlp tab %s failed (exit %d): %s", url, result.returncode, result.stderr[:200]
+            )
             continue
         for line in result.stdout.strip().splitlines():
             if not line.strip():
@@ -161,7 +165,7 @@ def _parse_video_entry(entry: dict) -> VideoInfo | None:
     # Strip any URL prefix to get just the ID
     video_id = str(video_id)
     # Handle full YouTube URLs: extract ID from watch?v= pattern
-    match = re.search(r'[?&]v=([a-zA-Z0-9_-]{11})', video_id)
+    match = re.search(r"[?&]v=([a-zA-Z0-9_-]{11})", video_id)
     if match:
         video_id = match.group(1)
     elif "/" in video_id:

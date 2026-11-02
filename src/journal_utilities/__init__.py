@@ -11,15 +11,15 @@ __version__ = "0.1.0"
 # ---------------------------------------------------------------------------
 
 _SUBMODULE_MAP: dict[str, tuple[str, str]] = {
-    "channel":     (".youtube",     "channel"),
-    "playlist":    (".youtube",     "playlist"),
-    "youtube":     (".youtube",     "youtube"),
-    "downloader":  (".download",    "downloader"),
-    "transcriber": (".transcribe",  "transcriber"),
-    "renderer":    (".render",      "renderer"),
-    "database":    (".data",        "database"),
-    "importer":    (".data",        "importer"),
-    "exporter":    (".export",      "exporter"),
+    "channel": (".youtube", "channel"),
+    "playlist": (".youtube", "playlist"),
+    "youtube": (".youtube", "youtube"),
+    "downloader": (".download", "downloader"),
+    "transcriber": (".transcribe", "transcriber"),
+    "renderer": (".render", "renderer"),
+    "database": (".data", "database"),
+    "importer": (".data", "importer"),
+    "exporter": (".export", "exporter"),
 }
 
 __all__ = [
@@ -39,7 +39,7 @@ def __getattr__(name: str) -> Any:  # noqa: ANN401 - dynamic module resolution i
     if name in _SUBMODULE_MAP:
         pkg, mod = _SUBMODULE_MAP[name]
         import importlib
+
         parent = importlib.import_module(pkg, __name__)
         return getattr(parent, mod)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-

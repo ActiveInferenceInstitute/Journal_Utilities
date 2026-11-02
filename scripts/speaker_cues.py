@@ -63,16 +63,21 @@ def cues_for_item(item_dir: Path, meta: dict) -> None:
             first, longest = st["first"], st["longest"]
             snippet = (longest.get("text") or "").strip()[:90]
             print(f"    {label}{name}   talk {mmss(st['talk'])}")
-            print(f"      first   {mmss(first['start']):>8}  "
-                  f"https://www.youtube.com/watch?v={base}&t={int(first['start'])}s")
-            print(f"      longest {mmss(longest['start']):>8}  "
-                  f"https://www.youtube.com/watch?v={base}&t={int(longest['start'])}s"
-                  f"  \"{snippet}\"")
+            print(
+                f"      first   {mmss(first['start']):>8}  "
+                f"https://www.youtube.com/watch?v={base}&t={int(first['start'])}s"
+            )
+            print(
+                f"      longest {mmss(longest['start']):>8}  "
+                f"https://www.youtube.com/watch?v={base}&t={int(longest['start'])}s"
+                f'  "{snippet}"'
+            )
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--journal", type=Path, default=REPO.parent / "ActiveInferenceJournal")
     parser.add_argument("--item", help="item path relative to the source root")
     args = parser.parse_args()

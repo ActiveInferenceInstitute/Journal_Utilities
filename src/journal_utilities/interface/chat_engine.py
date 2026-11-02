@@ -134,11 +134,15 @@ class ChatEngine:
                             if not fallback:
                                 fallback = chat_models[0]
                         else:
-                             # If all look like embeddings, just take first
+                            # If all look like embeddings, just take first
                             fallback = models[0] if models else None
 
                         if fallback:
-                            logger.info("Configured model %s not found. Falling back to %s", OLLAMA_MODEL, fallback)
+                            logger.info(
+                                "Configured model %s not found. Falling back to %s",
+                                OLLAMA_MODEL,
+                                fallback,
+                            )
                             selected_model = fallback
 
                     self._ollama_available = True
@@ -187,9 +191,7 @@ class ChatEngine:
         video_ids = [c["video_id"] for c in chunks]
         context_parts = []
         for c in chunks:
-            context_parts.append(
-                f"[Transcript excerpt from video {c['video_id']}]\n{c['text']}\n"
-            )
+            context_parts.append(f"[Transcript excerpt from video {c['video_id']}]\n{c['text']}\n")
 
         context = "\n---\n".join(context_parts)
         return context, video_ids

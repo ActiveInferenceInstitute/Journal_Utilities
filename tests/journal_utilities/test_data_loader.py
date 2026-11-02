@@ -91,17 +91,17 @@ class TestSearchIndex:
         idx.add_document(
             "v1",
             "Active Inference is a framework for understanding brain function "
-            "based on the free energy principle developed by Karl Friston."
+            "based on the free energy principle developed by Karl Friston.",
         )
         idx.add_document(
             "v2",
             "Bayesian inference provides a principled way to update beliefs "
-            "in light of new evidence using Bayes theorem."
+            "in light of new evidence using Bayes theorem.",
         )
         idx.add_document(
             "v3",
             "Deep learning models use neural networks with multiple layers "
-            "to learn representations of data."
+            "to learn representations of data.",
         )
         return idx
 
@@ -200,9 +200,7 @@ class TestDataLoader:
                 },
             ],
         }
-        (output / "channel_videos.json").write_text(
-            json.dumps(manifest), encoding="utf-8"
-        )
+        (output / "channel_videos.json").write_text(json.dumps(manifest), encoding="utf-8")
 
         # Transcripts
         tx = output / "transcripts"
@@ -338,9 +336,7 @@ class TestDataLoader:
                 }
             ]
         }
-        (data_dir / "download_manifest.json").write_text(
-            json.dumps(manifest), encoding="utf-8"
-        )
+        (data_dir / "download_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         loader = DataLoader(data_dir=data_dir)
         loader.load()
         record = loader.get_video("abc123")
@@ -362,4 +358,3 @@ class TestDataLoader:
         stats = loader.get_stats()
         assert "category_count" in stats
         assert isinstance(stats["category_count"], int)
-

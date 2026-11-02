@@ -103,7 +103,13 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
                     d["search_score"] = r.score
                     d["search_snippet"] = r.snippet
                     video_dicts.append(d)
-            return {"videos": video_dicts, "total": total, "query": q, "offset": offset, "limit": limit}
+            return {
+                "videos": video_dicts,
+                "total": total,
+                "query": q,
+                "offset": offset,
+                "limit": limit,
+            }
 
         # Normal listing
         records, total = loader.get_all_videos(
@@ -241,11 +247,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     @app.get("/api/categories")
     async def get_categories() -> dict[str, Any]:
         """Get all categories with video counts."""
-        return {
-            "categories": {
-                cat: len(vids) for cat, vids in sorted(loader.categories.items())
-            }
-        }
+        return {"categories": {cat: len(vids) for cat, vids in sorted(loader.categories.items())}}
 
     @app.get("/api/search")
     async def search(

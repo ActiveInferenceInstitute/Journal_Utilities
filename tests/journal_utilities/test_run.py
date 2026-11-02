@@ -239,6 +239,7 @@ class TestDefaultPipeline:
         import argparse
 
         import run
+
         args = argparse.Namespace(command=None, config=None, log_level=None)
         # Monkeypatch heavy steps to keep the test fast
         monkeypatch.setattr(run, "cmd_export", lambda cfg, a: 0)
@@ -269,6 +270,7 @@ class TestDefaultPipeline:
         import argparse
 
         import run
+
         args = argparse.Namespace(command=None, config=None, log_level=None)
         monkeypatch.setattr(run, "cmd_export", lambda cfg, a: 0)
         monkeypatch.setattr(run, "cmd_test", lambda cfg, a: 0)
@@ -283,10 +285,12 @@ class TestDefaultPipeline:
     def test_default_shows_clickable_url(self, config, capsys, monkeypatch):
         """Step 5/5 should print the clickable URL before serving."""
         import argparse
+
         args = argparse.Namespace(command=None, config=None, log_level=None)
 
         # Monkeypatch cmd_serve to avoid actually starting the server
         import run
+
         monkeypatch.setattr(run, "cmd_serve", lambda cfg, a: 0)
         # Monkeypatch cmd_test to avoid running real tests
         monkeypatch.setattr(run, "cmd_test", lambda cfg, a: 0)

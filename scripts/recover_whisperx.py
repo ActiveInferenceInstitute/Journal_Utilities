@@ -44,7 +44,10 @@ VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 def git_show(journal: Path, commit: str, path: str) -> str:
     return subprocess.run(
         ["git", "-C", str(journal), "show", f"{commit}:{path}"],
-        check=True, capture_output=True, text=True).stdout
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
 
 
 def index_old_outputs(journal: Path, commit: str) -> dict[str, dict]:
@@ -55,7 +58,10 @@ def index_old_outputs(journal: Path, commit: str) -> dict[str, dict]:
     """
     listing = subprocess.run(
         ["git", "-C", str(journal), "ls-tree", "-r", "--name-only", commit],
-        check=True, capture_output=True, text=True).stdout.splitlines()
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
     index: dict[str, dict] = {}
     for path in listing:
         m = re.match(r"(.+)\.simple\.(txt|json)$", path)
@@ -65,7 +71,7 @@ def index_old_outputs(journal: Path, commit: str) -> dict[str, dict]:
         if re.search(r"_sess\d+$", stem):
             continue
         if stem.endswith("]") and "[" in stem:
-            vid = stem[stem.rindex("[") + 1:-1]
+            vid = stem[stem.rindex("[") + 1 : -1]
         else:
             vid = stem[-11:]
         if not VIDEO_ID.fullmatch(vid):
@@ -105,8 +111,9 @@ def plan_items(journal: Path, old: dict[str, dict], only_item: str = "") -> list
     return plan
 
 
-def extract_to_cache(journal: Path, commit: str, old: dict[str, dict],
-                     vid: str, work_dir: Path) -> None:
+def extract_to_cache(
+    journal: Path, commit: str, old: dict[str, dict], vid: str, work_dir: Path
+) -> None:
     for ext in ("txt", "json"):
         dest = work_dir / f"{vid}.simple.{ext}"
         if dest.exists():
@@ -122,16 +129,22 @@ def extract_to_cache(journal: Path, commit: str, old: dict[str, dict],
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--journal", type=Path, default=REPO.parent / "ActiveInferenceJournal")
-    parser.add_argument("--commit", default=PRE_REORG_COMMIT,
-                        help="pre-reorg commit holding the *.simple.* outputs")
-    parser.add_argument("--work-dir", type=Path,
-                        default=REPO / "data/output/whisperx-recovered",
-                        help="cache for extracted per-video outputs")
-    parser.add_argument("--apply", action="store_true",
-                        help="write into the journal (default: dry-run plan)")
+    parser.add_argument(
+        "--commit", default=PRE_REORG_COMMIT, help="pre-reorg commit holding the *.simple.* outputs"
+    )
+    parser.add_argument(
+        "--work-dir",
+        type=Path,
+        default=REPO / "data/output/whisperx-recovered",
+        help="cache for extracted per-video outputs",
+    )
+    parser.add_argument(
+        "--apply", action="store_true", help="write into the journal (default: dry-run plan)"
+    )
     parser.add_argument("--item", default="", help="single item (path relative to source root)")
     args = parser.parse_args()
 
@@ -163,8 +176,10 @@ def main() -> int:
             done += 1
         except (OSError, subprocess.CalledProcessError, ValueError) as exc:
             print(f"FAILED {p['rel']}: {exc}")
-    print(f"\nwritten: {done}/{len(recover)} items — review the journal diff, "
-          "then regenerate indexes + validate before committing")
+    print(
+        f"\nwritten: {done}/{len(recover)} items — review the journal diff, "
+        "then regenerate indexes + validate before committing"
+    )
     return 0
 
 

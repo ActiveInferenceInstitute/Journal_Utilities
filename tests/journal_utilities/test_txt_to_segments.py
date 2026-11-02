@@ -85,7 +85,14 @@ def test_cli_writes_output_json(tmp_path: Path) -> None:
     src = _write_txt(tmp_path, " ".join(["tok"] * 160))
     out = tmp_path / "segments.json"
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts/txt_to_segments.py"), str(src), str(out), "--wpm", "120"],
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts/txt_to_segments.py"),
+            str(src),
+            str(out),
+            "--wpm",
+            "120",
+        ],
         capture_output=True,
         text=True,
         check=True,

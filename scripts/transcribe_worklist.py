@@ -73,8 +73,11 @@ def build_worklist(journal: Path, excluded: list = None) -> list[dict]:
         if max(filter(None, dates), default="") > today:
             continue  # scheduled — nothing to transcribe yet
         rel = str(meta_path.parent.relative_to(journal / SRC_PREFIX))
-        vids = [p["video_id"] for p in meta.get("parts", [])
-                if p.get("video_id") and p["video_id"] not in private_ids]
+        vids = [
+            p["video_id"]
+            for p in meta.get("parts", [])
+            if p.get("video_id") and p["video_id"] not in private_ids
+        ]
         if vids:
             work.append({"rel": rel, "dir": meta_path.parent, "vids": vids})
         else:
@@ -89,9 +92,18 @@ def download_wav(vid: str, wav_dir: Path) -> Path:
         return wav
     logger.info("downloading audio: %s", vid)
     subprocess.run(
-        ["yt-dlp", "-x", "--audio-format", "wav", "-o", str(wav_dir / f"{vid}.%(ext)s"),
-         "--", f"https://www.youtube.com/watch?v={vid}"],
-        check=True)
+        [
+            "yt-dlp",
+            "-x",
+            "--audio-format",
+            "wav",
+            "-o",
+            str(wav_dir / f"{vid}.%(ext)s"),
+            "--",
+            f"https://www.youtube.com/watch?v={vid}",
+        ],
+        check=True,
+    )
     if not wav.exists():
         raise FileNotFoundError(f"yt-dlp did not produce {wav}")
     return wav
@@ -107,21 +119,28 @@ def write_journal_transcript(item_dir: Path, vids: list[str], out_dir: Path) -> 
         seg_blocks.append({"video_id": vid, "segments": segments})
     (item_dir / "transcript.txt").write_text("\n\n".join(sections) + "\n", encoding="utf-8")
     (item_dir / "transcript.json").write_text(
-        json.dumps(seg_blocks, ensure_ascii=False), encoding="utf-8")
+        json.dumps(seg_blocks, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--journal", type=Path, default=REPO.parent / "ActiveInferenceJournal")
-    parser.add_argument("--work-dir", type=Path, default=REPO / "data/output/whisperx",
-                        help="cache for WAVs and per-video WhisperX outputs")
+    parser.add_argument(
+        "--work-dir",
+        type=Path,
+        default=REPO / "data/output/whisperx",
+        help="cache for WAVs and per-video WhisperX outputs",
+    )
     parser.add_argument("--run", action="store_true", help="transcribe (default: dry-run plan)")
     parser.add_argument("--max-videos", type=int, default=0, help="bound this run")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--batch-size", type=int, default=48)
-    parser.add_argument("--compute-type", default="float16",
-                        help="float16, or int8 if low on GPU memory")
+    parser.add_argument(
+        "--compute-type", default="float16", help="float16, or int8 if low on GPU memory"
+    )
     args = parser.parse_args()
 
     load_dotenv(REPO / ".env")
@@ -184,8 +203,9 @@ def main() -> int:
                 wav = download_wav(vid, wav_dir)
                 if service is None:
                     logger.info("loading WhisperX models (%s, %s)", args.device, args.compute_type)
-                    service = TranscriptionService(hf_token, args.device,
-                                                   args.batch_size, args.compute_type)
+                    service = TranscriptionService(
+                        hf_token, args.device, args.batch_size, args.compute_type
+                    )
                 logger.info("transcribing %s (%s)", vid, item["rel"])
                 service.transcribe(str(args.work_dir), str(wav))
                 done += 1

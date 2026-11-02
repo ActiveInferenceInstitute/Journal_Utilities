@@ -1,6 +1,7 @@
 """
 JSON schemas for entity extraction from Active Inference transcripts.
 """
+
 import json
 from collections.abc import Mapping
 from pathlib import Path

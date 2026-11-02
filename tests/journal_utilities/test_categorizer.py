@@ -13,13 +13,15 @@ class TestCategorizeName:
     # Livestream tests
     def test_fundamentals_session(self):
         category, series, episode = categorize_name(
-            "Fundamentals of Active Inference (Chapter 6 Session 27) July 14, 2026", False)
+            "Fundamentals of Active Inference (Chapter 6 Session 27) July 14, 2026", False
+        )
         assert category == "TextbookGroup/Namjoshi2026/Cohort_1"
         assert series == "Session_027"
 
     def test_fundamentals_review_session(self):
         category, series, _ = categorize_name(
-            "Fundamentals of Active Inference (Part 1 review, Session 24) July 3, 2026", False)
+            "Fundamentals of Active Inference (Part 1 review, Session 24) July 3, 2026", False
+        )
         assert category == "TextbookGroup/Namjoshi2026/Cohort_1"
         assert series == "Session_024"
 
@@ -108,14 +110,18 @@ class TestCategorizeName:
         assert episode == "2"
 
     def test_bookstream_with_prefix(self):
-        category, series, episode = categorize_name("Active Inference ~ Some Book ~ BookStream #002.3", True)
+        category, series, episode = categorize_name(
+            "Active Inference ~ Some Book ~ BookStream #002.3", True
+        )
         assert category == "BookStream"
         assert series == "BookStream_002"
         assert episode == "3"
 
     # Symposium tests
     def test_symposium_2021(self):
-        category, series, episode = categorize_name("Prof. Karl Friston ~ Applied Active Inference Symposium", True)
+        category, series, episode = categorize_name(
+            "Prof. Karl Friston ~ Applied Active Inference Symposium", True
+        )
         assert category == "Applied Active Inference Symposium"
         assert series == "2021 Symposium with Karl Friston"
         assert episode is None
@@ -128,34 +134,44 @@ class TestCategorizeName:
 
     def test_symposium_ordinal_2025(self):
         category, series, _ = categorize_name(
-            "5th Applied Active Inference Symposium (Part 2, Nov 13, 2025) ~ (Full reupload)", False)
+            "5th Applied Active Inference Symposium (Part 2, Nov 13, 2025) ~ (Full reupload)", False
+        )
         assert category == "Applied Active Inference Symposium/2025"
         assert series == "part 2"
 
     def test_symposium_ordinal_2024(self):
         category, series, _ = categorize_name(
-            "4th Applied Active Inference Symposium (Part 1, Nov 13, 2024) ~ Full Upload", False)
+            "4th Applied Active Inference Symposium (Part 1, Nov 13, 2024) ~ Full Upload", False
+        )
         assert category == "Applied Active Inference Symposium/2024"
         assert series == "part 1"
 
     # Special patterns tests
     def test_social_sciences(self):
-        category, series, episode = categorize_name("Active Inference for the Social Sciences 2023", True)
+        category, series, episode = categorize_name(
+            "Active Inference for the Social Sciences 2023", True
+        )
         assert category == "Courses/ActiveInferenceForTheSocialSciences"
 
     def test_physics_info(self):
-        category, series, episode = categorize_name("Physics as Information Processing Lecture 1", True)
+        category, series, episode = categorize_name(
+            "Physics as Information Processing Lecture 1", True
+        )
         assert category == "Courses/PhysicsAsInformationProcessing_ChrisFields"
 
     # Textbook group tests
     def test_textbookgroup(self):
-        category, series, episode = categorize_name("ActInf Textbook Group ~ Cohort 5 ~ Meeting 10", True)
+        category, series, episode = categorize_name(
+            "ActInf Textbook Group ~ Cohort 5 ~ Meeting 10", True
+        )
         assert category == "TextbookGroup/ParrPezzuloFriston2022/Cohort_5"
         assert series == "Meeting_010"
         assert episode is None
 
     def test_textbook_parr(self):
-        category, series, episode = categorize_name("Parr, Pezzulo, Friston 2022 Textbook Cohort 7, Meeting 3", True)
+        category, series, episode = categorize_name(
+            "Parr, Pezzulo, Friston 2022 Textbook Cohort 7, Meeting 3", True
+        )
         assert category == "TextbookGroup/ParrPezzuloFriston2022/Cohort_7"
         assert series == "Meeting_003"
         assert episode is None

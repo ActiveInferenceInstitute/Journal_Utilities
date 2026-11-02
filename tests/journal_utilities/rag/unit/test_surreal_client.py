@@ -40,7 +40,7 @@ class TestSurrealDBClientInit:
             namespace="custom_ns",
             database="custom_db",
             username="user",
-            password="pass"
+            password="pass",
         )
 
         assert client.url == "ws://custom:9000"
@@ -73,7 +73,7 @@ class TestSurrealDBClientConnection:
                 namespace="ns",
                 database="db",
                 username="user",
-                password="pass"
+                password="pass",
             )
 
             await client.connect()
@@ -91,7 +91,7 @@ class TestSurrealDBClientConnection:
                 namespace="ns",
                 database="db",
                 username="user",
-                password="pass"
+                password="pass",
             )
 
             await client.connect()
@@ -122,7 +122,7 @@ class TestSurrealDBClientEntities:
             description="A test entity",
             confidence=0.9,
             mentions=5,
-            context=["test context"]
+            context=["test context"],
         )
 
     @pytest.mark.asyncio
@@ -136,7 +136,7 @@ class TestSurrealDBClientEntities:
                 namespace="ns",
                 database="db",
                 username="user",
-                password="pass"
+                password="pass",
             )
             await client.connect()
 
@@ -148,14 +148,20 @@ class TestSurrealDBClientEntities:
     @pytest.mark.asyncio
     async def test_update_existing_entity(self, mock_surreal, sample_entity):
         """Test updating an existing entity."""
-        mock_surreal.query = AsyncMock(return_value=[{
-            "result": [{
-                "id": "entity:existing",
-                "confidence": 0.8,
-                "context": ["old context"],
-                "description": "Old description"
-            }]
-        }])
+        mock_surreal.query = AsyncMock(
+            return_value=[
+                {
+                    "result": [
+                        {
+                            "id": "entity:existing",
+                            "confidence": 0.8,
+                            "context": ["old context"],
+                            "description": "Old description",
+                        }
+                    ]
+                }
+            ]
+        )
 
         with patch("journal_utilities.rag.graph.surreal_client.Surreal", return_value=mock_surreal):
             client = SurrealDBClient(
@@ -163,7 +169,7 @@ class TestSurrealDBClientEntities:
                 namespace="ns",
                 database="db",
                 username="user",
-                password="pass"
+                password="pass",
             )
             await client.connect()
 
@@ -193,7 +199,7 @@ class TestSurrealDBClientTranscripts:
             title="Test Transcript",
             date=datetime.now(UTC),
             content="Test content",
-            source="/path/to/file.txt"
+            source="/path/to/file.txt",
         )
 
     @pytest.mark.asyncio
@@ -205,7 +211,7 @@ class TestSurrealDBClientTranscripts:
                 namespace="ns",
                 database="db",
                 username="user",
-                password="pass"
+                password="pass",
             )
             await client.connect()
 
@@ -217,12 +223,9 @@ class TestSurrealDBClientTranscripts:
     @pytest.mark.asyncio
     async def test_get_unprocessed_transcripts(self, mock_surreal):
         """Test getting unprocessed transcript paths."""
-        mock_surreal.query = AsyncMock(return_value=[{
-            "result": [
-                {"source": "/path/1.txt"},
-                {"source": "/path/2.txt"}
-            ]
-        }])
+        mock_surreal.query = AsyncMock(
+            return_value=[{"result": [{"source": "/path/1.txt"}, {"source": "/path/2.txt"}]}]
+        )
 
         with patch("journal_utilities.rag.graph.surreal_client.Surreal", return_value=mock_surreal):
             client = SurrealDBClient(
@@ -230,7 +233,7 @@ class TestSurrealDBClientTranscripts:
                 namespace="ns",
                 database="db",
                 username="user",
-                password="pass"
+                password="pass",
             )
             await client.connect()
 
@@ -256,10 +259,7 @@ class TestSurrealDBClientRelationships:
     @pytest.fixture
     def sample_relationship(self):
         return Relationship(
-            source="Entity A",
-            target="Entity B",
-            relationship_type="relates_to",
-            confidence=0.85
+            source="Entity A", target="Entity B", relationship_type="relates_to", confidence=0.85
         )
 
     @pytest.mark.asyncio
@@ -273,7 +273,7 @@ class TestSurrealDBClientRelationships:
                 namespace="ns",
                 database="db",
                 username="user",
-                password="pass"
+                password="pass",
             )
             await client.connect()
 
@@ -287,11 +287,7 @@ class TestSurrealDBClientErrors:
     def test_query_without_connection(self):
         """Test that queries fail without connection."""
         client = SurrealDBClient(
-            url="ws://test:8080",
-            namespace="ns",
-            database="db",
-            username="user",
-            password="pass"
+            url="ws://test:8080", namespace="ns", database="db", username="user", password="pass"
         )
 
         # db is None until connect() is called
@@ -301,20 +297,10 @@ class TestSurrealDBClientErrors:
     async def test_create_entity_not_connected(self):
         """Test create_entity raises error when not connected."""
         client = SurrealDBClient(
-            url="ws://test:8080",
-            namespace="ns",
-            database="db",
-            username="user",
-            password="pass"
+            url="ws://test:8080", namespace="ns", database="db", username="user", password="pass"
         )
 
-        entity = Entity(
-            name="Test",
-            type="concept",
-            confidence=0.9,
-            mentions=1,
-            context=["test"]
-        )
+        entity = Entity(name="Test", type="concept", confidence=0.9, mentions=1, context=["test"])
 
         with pytest.raises(RuntimeError, match="Database not connected"):
             await client.create_entity(entity)

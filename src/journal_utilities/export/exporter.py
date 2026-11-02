@@ -160,6 +160,7 @@ def _build_metadata(video_id: str, video_index: dict[str, dict[str, Any]]) -> di
     # Category / series / episode from categorizer
     try:
         from journal_utilities.youtube.categorizer import categorize_name
+
         cat, series, episode = categorize_name(title, is_unique_event_name=False)
         if cat:
             meta["category"] = cat
@@ -198,8 +199,9 @@ def _build_metadata(video_id: str, video_index: dict[str, dict[str, Any]]) -> di
 # ---------------------------------------------------------------------------
 
 
-def _to_plaintext(text: str, dest: Path, title: str = "",
-                   metadata: dict[str, Any] | None = None) -> None:
+def _to_plaintext(
+    text: str, dest: Path, title: str = "", metadata: dict[str, Any] | None = None
+) -> None:
     """Write clean plaintext with an optional metadata header."""
     lines: list[str] = []
     meta = metadata or {}
@@ -242,8 +244,9 @@ def _yaml_escape(value: str) -> str:
     )
 
 
-def _to_markdown(text: str, dest: Path, title: str = "",
-                  metadata: dict[str, Any] | None = None) -> None:
+def _to_markdown(
+    text: str, dest: Path, title: str = "", metadata: dict[str, Any] | None = None
+) -> None:
     """Write Markdown with YAML frontmatter metadata."""
     now = datetime.now(UTC).isoformat()
     meta = metadata or {}
@@ -268,7 +271,7 @@ def _to_markdown(text: str, dest: Path, title: str = "",
     if meta.get("url"):
         fm_lines.append(f'url: "{_yaml_escape(str(meta["url"]))}"')
     if meta.get("views") is not None:
-        fm_lines.append(f'views: {meta["views"]}')
+        fm_lines.append(f"views: {meta['views']}")
     if meta.get("date"):
         fm_lines.append(f'date: "{_yaml_escape(str(meta["date"]))}"')
     fm_lines.append(f'exported_at: "{now}"')
@@ -281,8 +284,9 @@ def _to_markdown(text: str, dest: Path, title: str = "",
     dest.write_text(frontmatter + body, encoding="utf-8")
 
 
-def _to_json(text: str, dest: Path, title: str = "", source: str = "",
-             metadata: dict[str, Any] | None = None) -> None:
+def _to_json(
+    text: str, dest: Path, title: str = "", source: str = "", metadata: dict[str, Any] | None = None
+) -> None:
     """Write structured JSON with metadata."""
     now = datetime.now(UTC).isoformat()
     meta = metadata or {}
@@ -290,33 +294,31 @@ def _to_json(text: str, dest: Path, title: str = "", source: str = "",
         "title": meta.get("title", title),
     }
     # Inject rich metadata
-    for key in ("category", "series", "episode", "speakers",
-                "duration", "url", "views", "date"):
+    for key in ("category", "series", "episode", "speakers", "duration", "url", "views", "date"):
         if meta.get(key) is not None:
             payload[key] = meta[key]
-    payload.update({
-        "source": source,
-        "exported_at": now,
-        "word_count": len(text.split()),
-        "char_count": len(text),
-        "transcript": text.strip(),
-    })
+    payload.update(
+        {
+            "source": source,
+            "exported_at": now,
+            "word_count": len(text.split()),
+            "char_count": len(text),
+            "transcript": text.strip(),
+        }
+    )
     dest.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
 
 
-def _to_html(text: str, dest: Path, title: str = "",
-             metadata: dict[str, Any] | None = None) -> None:
+def _to_html(
+    text: str, dest: Path, title: str = "", metadata: dict[str, Any] | None = None
+) -> None:
     """Write a standalone HTML page with embedded CSS."""
     meta = metadata or {}
     display_title = meta.get("title", title)
-    escaped = (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     # Metadata values also flow into the HTML document — escape them too so a
     # title/URL from upstream metadata can never inject markup into the export.
     escaped_title = (
@@ -325,17 +327,14 @@ def _to_html(text: str, dest: Path, title: str = "",
         .replace(">", "&gt;")
         .replace('"', "&quot;")
     )
-    paragraphs = "\n".join(
-        f"<p>{line}</p>" if line.strip() else ""
-        for line in escaped.split("\n")
-    )
+    paragraphs = "\n".join(f"<p>{line}</p>" if line.strip() else "" for line in escaped.split("\n"))
 
     # Build metadata lines
     meta_parts: list[str] = []
     if meta.get("category"):
         meta_parts.append(f"Category: {meta['category']}")
     if meta.get("series"):
-        ep = f" &middot; Episode {meta['episode']}" if meta.get('episode') else ""
+        ep = f" &middot; Episode {meta['episode']}" if meta.get("episode") else ""
         meta_parts.append(f"Series: {meta['series']}{ep}")
     if meta.get("speakers"):
         meta_parts.append(f"Speakers: {', '.join(meta['speakers'])}")
@@ -408,18 +407,18 @@ def _sanitize_for_pdf(text: str) -> str:
     any remaining unsupported characters.
     """
     replacements = {
-        "\u2014": "--",   # em dash
-        "\u2013": "-",    # en dash
-        "\u2018": "'",    # left single curly quote
-        "\u2019": "'",    # right single curly quote
-        "\u201c": '"',    # left double curly quote
-        "\u201d": '"',    # right double curly quote
+        "\u2014": "--",  # em dash
+        "\u2013": "-",  # en dash
+        "\u2018": "'",  # left single curly quote
+        "\u2019": "'",  # right single curly quote
+        "\u201c": '"',  # left double curly quote
+        "\u201d": '"',  # right double curly quote
         "\u2026": "...",  # ellipsis
-        "\u2022": "-",    # bullet
-        "\u00a0": " ",    # non-breaking space
-        "\u2009": " ",    # thin space
-        "\u200b": "",     # zero-width space
-        "\u00b7": "-",    # middle dot
+        "\u2022": "-",  # bullet
+        "\u00a0": " ",  # non-breaking space
+        "\u2009": " ",  # thin space
+        "\u200b": "",  # zero-width space
+        "\u00b7": "-",  # middle dot
     }
     for char, replacement in replacements.items():
         text = text.replace(char, replacement)
@@ -428,8 +427,7 @@ def _sanitize_for_pdf(text: str) -> str:
     return text.encode("latin-1", errors="replace").decode("latin-1")
 
 
-def _to_pdf(text: str, dest: Path, title: str = "",
-            metadata: dict[str, Any] | None = None) -> None:
+def _to_pdf(text: str, dest: Path, title: str = "", metadata: dict[str, Any] | None = None) -> None:
     """Write a PDF document via fpdf2.
 
     Raises ``ImportError`` if ``fpdf2`` is not installed.
@@ -438,8 +436,7 @@ def _to_pdf(text: str, dest: Path, title: str = "",
         from fpdf import FPDF
     except ImportError:
         raise ImportError(
-            "PDF export requires 'fpdf2'. Install with: "
-            "uv pip install fpdf2"
+            "PDF export requires 'fpdf2'. Install with: uv pip install fpdf2"
         ) from None
 
     meta = metadata or {}
@@ -466,8 +463,7 @@ def _to_pdf(text: str, dest: Path, title: str = "",
     if subtitle_parts:
         pdf.set_font("Helvetica", "I", 10)
         pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 7, _sanitize_for_pdf(" | ".join(subtitle_parts)),
-                 new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, _sanitize_for_pdf(" | ".join(subtitle_parts)), new_x="LMARGIN", new_y="NEXT")
         pdf.set_text_color(0, 0, 0)
 
     pdf.ln(4)
@@ -486,9 +482,15 @@ def _to_pdf(text: str, dest: Path, title: str = "",
 # ---------------------------------------------------------------------------
 
 _FORMAT_WRITERS: dict[ExportFormat, Callable[..., None]] = {
-    ExportFormat.PLAINTEXT: lambda text, dest, title, source, meta: _to_plaintext(text, dest, title, meta),
-    ExportFormat.MARKDOWN: lambda text, dest, title, source, meta: _to_markdown(text, dest, title, meta),
-    ExportFormat.JSON: lambda text, dest, title, source, meta: _to_json(text, dest, title, source, meta),
+    ExportFormat.PLAINTEXT: lambda text, dest, title, source, meta: _to_plaintext(
+        text, dest, title, meta
+    ),
+    ExportFormat.MARKDOWN: lambda text, dest, title, source, meta: _to_markdown(
+        text, dest, title, meta
+    ),
+    ExportFormat.JSON: lambda text, dest, title, source, meta: _to_json(
+        text, dest, title, source, meta
+    ),
     ExportFormat.HTML: lambda text, dest, title, source, meta: _to_html(text, dest, title, meta),
     ExportFormat.PDF: lambda text, dest, title, source, meta: _to_pdf(text, dest, title, meta),
 }
@@ -579,9 +581,7 @@ def export_single(
         "Exported %s → %s (%s, %.2fs)",
         source_path.name,
         dest.name,
-        ExportResult(
-            source_path="", format=fmt, status="", file_size_bytes=size
-        ).file_size_str,
+        ExportResult(source_path="", format=fmt, status="", file_size_bytes=size).file_size_str,
         elapsed,
     )
     return ExportResult(
@@ -645,7 +645,9 @@ def export_transcripts(
         for src in sources:
             meta = _build_metadata(src.stem, video_index) if video_index else None
             result = export_single(
-                src, fmt_dir, fmt,
+                src,
+                fmt_dir,
+                fmt,
                 skip_existing=skip_existing,
                 metadata=meta,
             )
