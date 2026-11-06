@@ -37,9 +37,10 @@ uv run mypy src                            # type check — matches CI
 uv run python run.py journal-check         # read-only journal integrity gate
 ```
 
-The CI workflow (`.github/workflows/test.yml`) runs pytest, ruff, and mypy — a
-PR must be green on all of them. If you change the journal-maintenance scripts,
-also run the `validate_journal.py` gate against the sibling journal.
+The CI workflow (`.github/workflows/test.yml`) runs pytest, ruff, and mypy,
+plus the pinned GNN conformance baseline (see `.github/GNN.md`) — a PR must be
+green on all of them. If you change the journal-maintenance scripts, also run
+the `validate_journal.py` gate against the sibling journal.
 
 ## Style
 
