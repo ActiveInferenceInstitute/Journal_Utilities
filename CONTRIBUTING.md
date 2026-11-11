@@ -43,7 +43,7 @@ also run the `validate_journal.py` gate against the sibling journal.
 
 ## Style
 
-- Formatting follows the repo's `black` convention (`make format`); lint via
+- Formatting uses `ruff format` (`make format`); lint via
   `ruff` (`make lint`).
 - Commits use conventional-style messages: `docs: …`, `fix: …`, `feat: …`,
   `chore: …`, with a short scope when useful (e.g. `docs(scripts): …`).

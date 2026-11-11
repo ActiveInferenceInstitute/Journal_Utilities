@@ -108,20 +108,22 @@ surreal sql --endpoint http://localhost:8080 --username root --password root --n
 
 | Module | Purpose |
 |--------|---------|
-| `channel.py` | Channel enumeration via `yt-dlp --flat-playlist` |
-| `downloader.py` | Download transcripts, audio, video |
-| `transcriber.py` | Local Whisper transcription using `mlx-whisper` (Apple Silicon) |
-| `playlist.py` | Playlist enumeration and metadata |
-| `renderer.py` | Markdown/HTML rendering of transcripts |
-| `youtube.py` | URL builder helpers |
-| `categorizer.py` | Video categorization by series/type |
-| `database.py` | Database models and queries |
-| `importer.py` | Session import with audit trail |
-| `transcribe.py` | WhisperX transcription with diarization (GPU/CUDA) |
+| `youtube/channel.py` | Channel enumeration via `yt-dlp --flat-playlist` |
+| `download/downloader.py` | Download transcripts, audio, video |
+| `transcribe/transcriber.py` | Local Whisper transcription using `mlx-whisper` (Apple Silicon) |
+| `youtube/playlist.py` | Playlist enumeration and metadata |
+| `render/renderer.py` | Markdown/HTML rendering of transcripts |
+| `youtube/youtube.py` | URL builder helpers |
+| `youtube/categorizer.py` | Video categorization by series/type |
+| `data/database.py` | Database models and queries |
+| `data/importer.py` | Session import with audit trail |
+| `transcribe/transcribe.py` | WhisperX transcription with diarization (GPU/CUDA) |
 | `interface/app.py` | FastAPI web server, REST API routes |
 | `interface/data_loader.py` | Video manifest builder from `data/output/` |
 | `interface/chat_engine.py` | Ollama RAG chat engine with transcript context |
 | `export/exporter.py` | Multi-format transcript export |
+| `site/builder.py` | Static GitHub Pages bundle builder |
+| `ingest/enumerate.py` | Channel enumeration/scaffold ingest helpers |
 
 ### Entity Extraction (`src/journal_utilities/rag/`)
 
@@ -165,6 +167,7 @@ All pipeline options in a single plaintext file:
 | `[export]` | `plaintext`, `pdf`, `markdown`, `json`, `html`, `output_dir` |
 | `[interface]` | `host`, `port` |
 | `[database]` | `url`, `user`, `password`, `namespace`, `database` |
+| `[pipeline]` | `config`, `validate`, `export`, `test`, `serve`, `test_strict` |
 
 ### Environment Variables (`.env`)
 
@@ -190,7 +193,9 @@ All pipeline options in a single plaintext file:
 
 | Group | Install | Purpose |
 |-------|---------|---------|
+| `transcribe` | `uv pip install -e ".[transcribe]"` | WhisperX (torch + diarization) |
 | `transcribe-local` | `uv pip install -e ".[transcribe-local]"` | `mlx-whisper` |
+| `rag` | `uv pip install -e ".[rag]"` | Cohere, SurrealDB, structlog |
 | `interface` | `uv pip install -e ".[interface]"` | FastAPI, uvicorn, httpx |
 | `export` | `uv pip install -e ".[export]"` | fpdf2 for PDF export |
-| `dev` | `uv pip install -e ".[dev]"` | pytest, black, ruff, mypy |
+| `dev` | `uv sync --group dev` | pytest, ruff, mypy |

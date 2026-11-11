@@ -100,7 +100,7 @@ Cohere AI entity extraction (people, concepts, theories, organizations) and rela
 ```bash
 # 1. Clone & install
 git clone https://github.com/ActiveInferenceInstitute/Journal_Utilities.git
-cd Journal-Utilities
+cd Journal_Utilities
 uv sync --all-extras
 
 # 2. Run the default pipeline (Config → Validate → Export → Test → Serve)
@@ -182,11 +182,14 @@ Journal-Utilities/
 │   ├── rag/                      #   Entity extraction pipeline
 │   ├── render/                   #   Course scaffolding
 │   ├── export/                   #   Multi-format transcript export
+│   ├── ingest/                   #   Channel enumeration/scaffold ingest helpers
+│   ├── site/                     #   Static GitHub Pages site builder
+│   ├── llm/                      #   LLM tool integration (placeholder)
 │   └── utils/                    #   Shared utilities
 ├── scripts/                      # CLI tools
 ├── tests/                        # Pytest suite
 ├── data/                         # Input, output, database storage
-├── docs/                         # 10 module guides
+├── docs/                         # Module and workflow guides
 ├── run.py                        # Pipeline runner
 ├── config.ini                    # All configuration
 └── pyproject.toml                # Python 3.12+
@@ -216,6 +219,9 @@ and [`docs/REFACTOR_READINESS.md`](docs/REFACTOR_READINESS.md) for the refactor 
 | [**RAG & Graph**](docs/rag.md) | Cohere extraction, entity schema, knowledge graph |
 | [**Data & Database**](docs/data.md) | SurrealDB schema, Coda import, audit trails |
 | [**Render**](docs/render.md) | Playlist → course scaffolding, `module.md` format |
+| [**Site**](docs/site.md) | Static GitHub Pages bundle, URL contract, sitemap |
+| [**M3 Ingest**](docs/m3-ingest.md) | Weekly channel enumeration, scaffold, reconciliation |
+| [**Privacy**](docs/privacy.md) | Processing boundaries, API usage, retention |
 | [**Agent Guide**](AGENTS.md) | Architecture, code patterns, agent development rules |
 
 ---

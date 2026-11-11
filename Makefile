@@ -20,7 +20,7 @@ help:
 	@echo "Development:"
 	@echo "  make test         - Run tests"
 	@echo "  make lint         - Run linter (ruff)"
-	@echo "  make format       - Format code with black"
+	@echo "  make format       - Format code with ruff"
 	@echo "  make journal-check - Validate the sibling journal (read-only)"
 	@echo ""
 	@echo "Database:"

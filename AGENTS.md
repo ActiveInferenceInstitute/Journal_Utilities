@@ -19,6 +19,8 @@ Journal-Utilities is a modular, config-driven system for processing the Active I
 | **Export** | `src/journal_utilities/export/` | `exporter.py` | [docs/export.md](docs/export.md) |
 | **Render** | `src/journal_utilities/render/` | `renderer.py` | [docs/render.md](docs/render.md) |
 | **Interface** | `src/journal_utilities/interface/` | `app.py`, `chat_engine.py` | [docs/web_interface.md](docs/web_interface.md) |
+| **Site** | `src/journal_utilities/site/` | `builder.py`, `pages_site.py`, `sitemap.py` | [docs/site.md](docs/site.md) |
+| **Ingest** | `src/journal_utilities/ingest/` | `enumerate.py`, `ytdlp.py`, `scaffold.py` | [docs/m3-ingest.md](docs/m3-ingest.md) |
 
 The generated journal boundary is maintained by the scripts in `scripts/`. Use
 `enrich_metadata.py` for explicit metadata enrichment, then
@@ -115,6 +117,15 @@ src/journal_utilities/
 │   └── renderer.py         # Markdown/HTML rendering
 ├── export/                 # Transcript export
 │   └── exporter.py         # Plaintext, PDF, Markdown, JSON, HTML
+├── ingest/                 # Channel enumeration/scaffold ingest helpers
+│   ├── enumerate.py        # Channel enumeration helpers
+│   ├── ytdlp.py            # yt-dlp invocation helpers
+│   ├── scaffold.py         # Course scaffold helpers
+│   └── diff.py             # Manifest reconciliation
+├── site/                   # Static GitHub Pages generation
+│   ├── builder.py          # SPA bundle builder
+│   ├── pages_site.py       # Per-item static pages
+│   └── sitemap.py          # sitemap.xml/robots.txt
 ├── llm/                    # LLM tool integration (placeholder)
 └── utils/                  # General utilities
 ```
@@ -133,6 +144,7 @@ src/journal_utilities/
 | Enumerate channel | `python scripts/download_channel.py --enumerate-only` | `channel.py` |
 | Local Whisper | `python scripts/transcribe_missing.py` | `transcriber.py` |
 | Entity extraction | `make extract-entities` | `rag/main.py` |
+| Build static site | `uv run python scripts/build_pages_site.py --apply` | `site/builder.py` |
 
 ## Configuration
 

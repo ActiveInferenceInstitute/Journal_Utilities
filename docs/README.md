@@ -15,6 +15,7 @@ module- and workflow-level guides.
 | [`rag.md`](rag.md) | Entity/relationship extraction (Cohere → SurrealDB graph). |
 | [`export.md`](export.md) | Multi-format transcript export (plaintext/PDF/MD/JSON/HTML). |
 | [`render.md`](render.md) | Markdown/HTML rendering, course scaffolding. |
+| [`site.md`](site.md) | Static GitHub Pages bundle, URL contract, sitemap. |
 | [`web_interface.md`](web_interface.md) | FastAPI SPA for browsing the library. |
 | [`chat_engine.md`](chat_engine.md) | Ollama-powered RAG chat over transcripts. |
 | [`translation.md`](translation.md) | Hosted OpenRouter subtitle translation (`scripts/translate_subtitles_openrouter.py`). |
