@@ -40,3 +40,8 @@ journal. Keep them in sync when the per-item structure changes.
 CLI tools (channel download, transcription, journal maintenance) are documented in
 [`scripts/README.md`](../scripts/README.md); contribution and security guidance in
 [`CONTRIBUTING.md`](../CONTRIBUTING.md) and [`SECURITY.md`](../SECURITY.md).
+
+## Folder guide
+
+[`AGENTS.md`](AGENTS.md) records the rules for editing this tree (hand-written, no
+hardcoded corpus counts, keep `JOURNAL_SCHEMA.md` mirrored with the journal repo).

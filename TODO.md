@@ -2,8 +2,44 @@
 
 **Status:** Maintained
 **Owner:** Active Inference Institute / Journal-Utilities maintainers
-**Last reviewed:** 2026-08-02 (mega-deep documentation pass — full docs review, scoped
-findings below, all implemented and pushed; see `REVIEW_LOG_2026-08-02.md`)
+**Last reviewed:** 2026-11-11 (documentation completion pass — verified commands and
+links, added missing folder guides, refreshed the sidecar; see the pass-3 entry below)
+
+---
+
+## Pass 3 — documentation completion (2026-11-11)
+
+Verification-only + completeness pass. Nothing here weakens a gate or changes runtime code.
+
+- [x] **`docs/` index complete and modular** — `docs/README.md` links every module/workflow
+      guide; no single oversized document. No new docs were needed.
+- [x] **Documented commands verified** — `run.py` subcommands, `Makefile` targets, the
+      `journal-ui` console script, and every `scripts/*.py` referenced in `docs/`,
+      `README.md` and `AGENTS.md` resolve to a real file/subcommand.
+- [x] **Folder guides added** where a real folder with ≥3 tracked files lacked one:
+      `.github/`, `src/journal_utilities/{ingest,site}/` (+ `AGENTS.md`),
+      `src/journal_utilities/{site,interface}/static/`, and
+      `tests/{site,youtube,journal_utilities/ingest,journal_utilities/rag/unit}/`.
+- [x] **README** gained a short table of contents and an honest status section (offline
+      vs. network/credentials/private-checkout requirements).
+- [x] **AGENTS.md** cookie guidance corrected to match the repository policy
+      (cookie-free by default; never commit `cookies.txt`).
+- [x] **`.aii` sidecar** tasks/artifacts refreshed to real entry points; rendered sidecar
+      docs hand-synced (the `aii_platform` generator is unavailable offline).
+
+Open after this pass:
+
+- [ ] **Test suite not run in this pass** — the pytest suite needs a provisioned `uv`
+      virtualenv (WhisperX/interface extras) that is not available in the docs pass
+      environment. Run `uv run pytest tests/ -q` on a configured checkout.
+- [ ] **Historical entries below reference retired scripts** — the "Follow-up pass
+      (2026-08-02)" section names `scripts/translate_subtitles.py`,
+      `scripts/translate_openrouter.py` and `scripts/translate_tb_watchdog.sh`; these were
+      later consolidated into `scripts/translate_subtitles_openrouter.py`. Kept as history,
+      not current guidance.
+- [ ] **Date-snapshot test counts** in `tests/README.md` / `tests/AGENTS.md` remain live
+      snapshots by policy; refresh from `uv run pytest tests/ -q` whenever a pass touches
+      tests.
 
 ---
 

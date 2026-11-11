@@ -39,7 +39,10 @@
 | Path | Kind | Description |
 | --- | --- | --- |
 | `README.md` | `doc` | Repository overview. |
+| `run.py` | `code` | Pipeline CLI runner (config/export/download/serve/test/full/journal-check). |
 | `src` | `code` | Source tree. |
+| `scripts` | `code` | CLI tools and journal maintenance scripts. |
+| `Makefile` | `code` | Convenience targets wrapping the CLIs and gates. |
 | `pyproject.toml` | `code` | Python package config. |
 | `LICENSE` | `doc` | License. |
 | `AGENTS.md` | `doc` | Agent guidance. |
@@ -51,8 +54,9 @@
 
 | Task | Command | Working directory | Description |
 | --- | --- | --- | --- |
-| `test` | `python -m pytest` | `.` | Run the test suite. |
-| `make` | `make` | `.` | Default make target. |
+| `test` | `uv run pytest tests/` | `.` | Run the test suite. |
+| `lint` | `uv run ruff check src/ tests/ scripts/` | `.` | Run the linter (matches CI). |
+| `make` | `make` | `.` | Default make target (help). |
 
 ## Validation
 

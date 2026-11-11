@@ -184,7 +184,9 @@ Required in `.env` (copy from `.env.example`):
 - **Skip-existing**: All download/transcription/export functions support `skip_existing=True`
 - **Config-driven**: `run.py` reads `config.ini` via `configparser`
 - **User-Agent**: All `yt-dlp` calls MUST use a modern browser User-Agent to avoid 403s
-- **Cookies**: Prefer browser cookies for authenticated YouTube access
+- **Cookies**: The downloader runs cookie-free by default. Never write cookies into a
+  tracked path and never commit `cookies.txt`; never pass `--cookies-from-browser`
+  into a tracked path
 
 ## Optional Dependencies
 

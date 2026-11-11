@@ -41,8 +41,9 @@ Institute repositories without touching this project's own content. The schema i
 
 | Task | Command | Working directory | Description |
 | --- | --- | --- | --- |
-| `test` | `python -m pytest` | `.` | Run the test suite. |
-| `make` | `make` | `.` | Default make target. |
+| `test` | `uv run pytest tests/` | `.` | Run the test suite. |
+| `lint` | `uv run ruff check src/ tests/ scripts/` | `.` | Run the linter (matches CI). |
+| `make` | `make` | `.` | Default make target (help). |
 
 ## Links
 

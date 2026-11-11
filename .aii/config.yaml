@@ -1,7 +1,7 @@
 # AII sidecar — InstituteOS metadata. Schema: aii_platform.aii_sidecar
 meta:
   sidecar_version: 1.2.1
-  updated: '2026-11-10'
+  updated: '2026-11-11'
 repo:
   name: Journal-Utilities
   slug: journal-utilities
@@ -29,9 +29,18 @@ artifacts:
 - path: README.md
   kind: doc
   description: Repository overview.
+- path: run.py
+  kind: code
+  description: Pipeline CLI runner (config/export/download/serve/test/full/journal-check).
 - path: src
   kind: code
   description: Source tree.
+- path: scripts
+  kind: code
+  description: CLI tools and journal maintenance scripts.
+- path: Makefile
+  kind: code
+  description: Convenience targets wrapping the CLIs and gates.
 - path: pyproject.toml
   kind: code
   description: Python package config.
@@ -69,11 +78,14 @@ capabilities:
 - citation
 tasks:
   test:
-    cmd: python -m pytest
+    cmd: uv run pytest tests/
     description: Run the test suite.
+  lint:
+    cmd: uv run ruff check src/ tests/ scripts/
+    description: Run the linter (matches CI).
   make:
     cmd: make
-    description: Default make target.
+    description: Default make target (help).
 docs:
 - README.md
 - AGENTS.md

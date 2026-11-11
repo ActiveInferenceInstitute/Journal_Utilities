@@ -16,6 +16,23 @@
 
 ---
 
+## Contents
+
+- [How It Works](#how-it-works)
+- [Status](#status)
+- [Features](#-features)
+- [Quick Start](#-quick-start)
+- [Architecture](#-architecture)
+- [Documentation](#-documentation)
+- [Testing](#-testing)
+- [Journal v2 maintenance](#journal-v2-maintenance)
+- [Transcription & speaker naming](#-transcription--speaker-naming)
+- [Environment](#-environment)
+- [Contributing](#-contributing)
+- [InstituteOS sidecar](#instituteos-sidecar)
+
+---
+
 ## How It Works
 
 ```mermaid
@@ -45,6 +62,27 @@ graph LR
 
 > **One command** runs the configured application pipeline: `uv run python run.py`
 > **One file** controls all options: `config.ini` — [see reference →](docs/configuration.md)
+
+---
+
+## Status
+
+Maintained and working. What runs without network or credentials:
+
+- configuration loading, transcript export, the pytest suite (offline tests), the
+  static site builder (`scripts/build_pages_site.py`, dry-run by default), and the
+  journal v2 maintenance scripts in their read-only/dry-run modes.
+
+What needs network, credentials or a private checkout:
+
+- `run.py download` and channel enumeration need YouTube access via `yt-dlp`; the
+  YouTube Data API helpers additionally need OAuth credentials and spend quota.
+- Transcription needs WhisperX/GPU models (`HUGGINGFACE_TOKEN`) or Apple Silicon
+  `mlx-whisper`.
+- Entity extraction needs `COHERE_API_KEY` and a live SurrealDB; the web interface
+  needs the `.[interface]` group and, for chat, a running Ollama.
+- Journal maintenance commands (`journal-check`, enrichment, repair, index
+  generation) need the sibling `ActiveInferenceJournal` checkout passed explicitly.
 
 ---
 
