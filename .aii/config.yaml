@@ -1,12 +1,13 @@
-# AII sidecar — InstituteOS metadata. Schema: instituteos.platform.aii_sidecar
+# AII sidecar — InstituteOS metadata. Schema: aii_platform.aii_sidecar
 meta:
-  updated: '2026-06-30'
+  sidecar_version: 1.2.1
+  updated: '2026-11-10'
 repo:
   name: Journal-Utilities
   slug: journal-utilities
   full_name: ActiveInferenceInstitute/Journal_Utilities
-  description: Utilities and Documentation for creating contents for the Active Inference
-    Journal
+  description: A modular, config-driven pipeline for downloading, transcribing, extracting,
+    exporting, browsing, and chatting with the Active Inference Institute video library.
 institute:
   category: publication
   maturity: released
@@ -37,6 +38,18 @@ artifacts:
 - path: LICENSE
   kind: doc
   description: License.
+- path: AGENTS.md
+  kind: doc
+  description: Agent guidance.
+- path: CITATION.cff
+  kind: citation
+  description: Machine-readable citation metadata.
+- path: tests
+  kind: test
+  description: Test suite.
+- path: docs
+  kind: doc
+  description: Documentation tree.
 provenance:
   license: CC0-1.0
   citation:
@@ -44,15 +57,16 @@ provenance:
 instituteos:
   tags:
   - journal
-  - utilities
-  - documentation
-  - creating
-  - contents
-  - html
+  - video-library
+  - transcription
+  - pipeline
+  - python
 capabilities:
 - python-package
 - tested
 - documentation
+- ci
+- citation
 tasks:
   test:
     cmd: python -m pytest
@@ -60,3 +74,10 @@ tasks:
   make:
     cmd: make
     description: Default make target.
+docs:
+- README.md
+- AGENTS.md
+- docs/INTEGRATION.md
+- docs/README.md
+- docs/AGENTS.md
+schema: aii-sidecar/v1
