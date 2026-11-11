@@ -7,8 +7,8 @@ is part of the Python package; it governs automation only.
 
 | Path | Purpose |
 | --- | --- |
-| `workflows/test.yml` | Required `test` job: pytest, `ruff check src/ tests/ scripts/`, `ruff format --check`, `mypy src`, and the read-only `scripts/validate_journal.py` gate. Also defines the `gnn conformance (pinned)` job. |
-| `workflows/artifact-guard.yml` | Fails a push/PR that adds build artifacts (`__pycache__`, `*.pyc`, `.DS_Store`, caches) to the tree. |
+| `workflows/test.yml` | Required `test` job: pytest, `ruff check src/ tests/ scripts/`, `ruff format --check`, and `mypy src`. Also defines the `gnn conformance (pinned)` job. |
+| `workflows/artifact-guard.yml` | Fails a push/PR that tracks generated or OS artifacts (`*.log`, `*.part`, `*.ytdl`, `.DS_Store`). |
 | `dependabot.yml` | Weekly grouped updates for GitHub Actions and `uv` Python dependencies (`cooldown` 7 days). |
 | `gnn-pin.json` | Pins `ActiveInferenceInstitute/Generalized_Notation_Notation` at `v5.0.3` (`8f293d9…`) for the GNN conformance job. |
 | `GNN.md` | What the GNN conformance job proves (pin + parser check over every `*.gnn.md` sketch). |
