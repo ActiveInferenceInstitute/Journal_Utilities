@@ -1,0 +1,51 @@
+{
+  "schema": "gate-baseline/v1",
+  "recorded": "2026-11-12",
+  "note": "Pre-gate-entry-point measurements, one run each, taken by hand before run.py grew the gate arms and before coverage left pytest's addopts. This file is reviewed input for `uv run python run.py gate report`, not script output: it records what the same checks cost when they were run as raw commands (ruff, mypy, pytest) with CI restating them. Update it only by re-measuring against the listed command.",
+  "host": "macOS-27.0.1-arm64-arm-64bit",
+  "python": "3.12.16",
+  "uv": "uv 0.13.7 (Homebrew 2026-11-03 aarch64-apple-darwin)",
+  "arms": {
+    "lint": {
+      "command": "python -m ruff check src/ tests/ scripts/",
+      "wall_seconds": 0.33,
+      "summary": "All checks passed!"
+    },
+    "format": {
+      "command": "python -m ruff format --check src/ tests/ scripts/",
+      "wall_seconds": 0.06,
+      "summary": "140 files already formatted"
+    },
+    "types": {
+      "command": "python -m mypy src",
+      "wall_seconds": 12.91,
+      "summary": "Success: no issues found in 54 source files"
+    },
+    "test": {
+      "command": "CI=true python -m pytest tests/ -q",
+      "wall_seconds": 42.67,
+      "summary": "682 passed, 15 skipped (coverage ran via pytest addopts)"
+    },
+    "test-full": {
+      "command": "python -m pytest tests/ -q",
+      "wall_seconds": 104.21,
+      "summary": "692 passed, 5 skipped (coverage ran via pytest addopts)"
+    },
+    "docs": {
+      "command": null,
+      "wall_seconds": null,
+      "summary": "no documentation check existed"
+    },
+    "gnn": {
+      "command": null,
+      "wall_seconds": null,
+      "summary": "CI-only pip heredoc in .github/workflows/test.yml; never run locally"
+    }
+  },
+  "same_command_comparison": {
+    "note": "The identical test command measured back-to-back before landing the gate, to separate the coverage removal from run-to-run variance.",
+    "before_wall_seconds": 42.67,
+    "after_wall_seconds": 24.17,
+    "summary": "682 passed, 15 skipped"
+  }
+}
