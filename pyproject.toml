@@ -78,7 +78,8 @@ src = ["src"]
 # ruff ≥0.15 also formats Python code blocks inside Markdown. The guides under
 # src/ and docs/ are hand-curated and their snippets are deliberately
 # illustrative, so both lint and format stay scoped to Python sources.
-extend-exclude = ["*.md"]
+# Publishing upstream copies are digest-pinned; never rewrite them with local rules.
+extend-exclude = ["*.md", "scripts/gate/identity.py", "scripts/gate/identity_selftest.py"]
 
 [tool.ruff.lint]
 select = [

@@ -35,13 +35,17 @@ exact sync command instead of a traceback.
 | `types` | `mypy src` | Strict typing over the package (per-module overrides documented in `pyproject.toml`) |
 | `test` | `pytest tests/ -q` with `CI=true` | The CI selection: same suite, live-network download tests self-skip (see `tests/journal_utilities/test_downloader.py`); counts are in the generated page |
 | `test-full` | `pytest tests/ -q --cov=src --cov-report=term-missing` | Everything this host can reach, including live downloads, plus coverage |
-| `docs` | `python scripts/check_docs_links.py` | Every relative link in tracked Markdown resolves; `docs/*.md` stays listed in `docs/documentation-index.md` and linked from `docs/README.md` |
+| `docs` | `python scripts/gate/check_docs.py` | Existing relative-link and docs-index checks, plus canonical Publishing artifact digests and the lead's drift selftest |
 | `gnn` | `uv run --no-project --with … python scripts/gnn_conformance.py` | The pinned parser parses and type-checks the GNN sketches |
 
 `gate all` runs `lint`, `format`, `types`, `test`, `docs`, `gnn` in that order and
 stops reporting per arm; it is the pre-push gate. `test-full` is deliberately not in
 `all`: it is the only arm that reaches the network in tests, so it is run when network
 behavior is what changed.
+
+The `docs` arm retains `scripts/check_docs_links.py` for the existing checks and
+runs the unchanged lead checker with `--verify-copy` for each pinned artifact.
+See [Publishing integration](workflows/publishing.md) for provenance and digests.
 
 ## GNN arm details
 

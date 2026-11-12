@@ -30,10 +30,13 @@ read-only `validate_journal.py` is the acceptance gate for every step above.
 
 ## Gate scripts
 
-Two scripts exist only to serve `uv run python run.py gate` and the CI jobs; they
-are not pipeline steps.
+These scripts serve `uv run python run.py gate` and the CI jobs; they are not
+pipeline steps.
 
-- `check_docs_links.py` — the `docs` arm. Fails when a relative link or image in a
+- `gate/check_docs.py` — the `docs` arm. Runs the existing docs checks, then the
+  unchanged Publishing identity checker and its drift selftest. Canonical copies
+  and digests are recorded in [the member contract](../docs/workflows/publishing.md).
+- `check_docs_links.py` — relative-link and index checks. Fails when a link or image in a
   tracked `*.md` file does not resolve (absolute URLs and anchors are out of scope;
   fenced code blocks are ignored), when a `docs/*.md` file is missing from
   `docs/documentation-index.md`, or when a top-level guide is missing from

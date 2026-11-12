@@ -597,7 +597,7 @@ GATE_REPORT_ARMS = ("lint", "format", "types", "test", "test-full", "docs", "gnn
 GATE_REPORT_PATH = PROJECT_ROOT / "docs" / "_generated" / "gate-arms.md"
 GATE_BASELINE_PATH = PROJECT_ROOT / "docs" / "gate-baseline.json"
 GATE_GNN_SCRIPT = PROJECT_ROOT / "scripts" / "gnn_conformance.py"
-GATE_DOCS_SCRIPT = PROJECT_ROOT / "scripts" / "check_docs_links.py"
+GATE_DOCS_SCRIPT = PROJECT_ROOT / "scripts" / "gate" / "check_docs.py"
 
 
 def _gate_python() -> str:
