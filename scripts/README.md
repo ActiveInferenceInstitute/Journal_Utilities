@@ -28,6 +28,22 @@ Curriculum                scaffold_youtube_courses.py
 The canonical maintenance chain is documented in `docs/JOURNAL_SCHEMA.md`; the
 read-only `validate_journal.py` is the acceptance gate for every step above.
 
+## Gate scripts
+
+Two scripts exist only to serve `uv run python run.py gate` and the CI jobs; they
+are not pipeline steps.
+
+- `check_docs_links.py` — the `docs` arm. Fails when a relative link or image in a
+  tracked `*.md` file does not resolve (absolute URLs and anchors are out of scope;
+  fenced code blocks are ignored), when a `docs/*.md` file is missing from
+  `docs/documentation-index.md`, or when a top-level guide is missing from
+  `docs/README.md`.
+- `gnn_conformance.py` — the `gnn` arm. Reads `.github/gnn-pin.json` (schema
+  `gnn-importer-pin/v1`), verifies the installed parser version against the pin,
+  then parses and type-checks every `*.gnn.md` sketch — or the pinned upstream
+  exemplar when the tree has none. `--requirements` prints the install specs so the
+  caller can provide the pinned parser without a project sync.
+
 ## `download_channel.py`
 
 Primary CLI for enumerate-and-download of YouTube channel content.
