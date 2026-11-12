@@ -590,8 +590,10 @@ def cmd_default(config: configparser.ConfigParser, args: argparse.Namespace) -> 
 # Gate arms — one entry point, the same commands CI runs
 # ---------------------------------------------------------------------------
 
-#: Arms in the order `gate all` runs them; `gate report` measures each one.
-GATE_ARMS = ("lint", "format", "types", "test", "test-full", "docs", "gnn")
+#: Arms `gate all` runs, in order: offline-safe and pre-push sized.
+GATE_ARMS = ("lint", "format", "types", "test", "docs", "gnn")
+#: Arms `gate report` measures: everything above plus the network/coverage arm.
+GATE_REPORT_ARMS = ("lint", "format", "types", "test", "test-full", "docs", "gnn")
 GATE_REPORT_PATH = PROJECT_ROOT / "docs" / "_generated" / "gate-arms.md"
 GATE_GNN_SCRIPT = PROJECT_ROOT / "scripts" / "gnn_conformance.py"
 GATE_DOCS_SCRIPT = PROJECT_ROOT / "scripts" / "check_docs_links.py"
@@ -722,10 +724,18 @@ def _git_revision() -> str:
     return completed.stdout.strip() or "unknown"
 
 
+def _display_command(command: list[str]) -> str:
+    """Shell-quoted arm command with repository paths made relative."""
+    import shlex
+
+    root = str(PROJECT_ROOT)
+    relative = [part.replace(root + os.sep, "./").replace(root, ".") for part in command]
+    return shlex.join(relative)
+
+
 def _write_gate_report(commands: dict[str, list[str]]) -> int:
     """Measure every arm once and regenerate docs/_generated/gate-arms.md."""
     import platform
-    import shlex
     from datetime import UTC, datetime
 
     # The `docs` arm validates links, including the links to this file: give the
@@ -738,7 +748,7 @@ def _write_gate_report(commands: dict[str, list[str]]) -> int:
         encoding="utf-8",
     )
 
-    rows = [(arm, *_run_gate_arm(arm, commands[arm])) for arm in GATE_ARMS]
+    rows = [(arm, *_run_gate_arm(arm, commands[arm])) for arm in GATE_REPORT_ARMS]
     uv_version = subprocess.run(
         ["uv", "--version"], capture_output=True, text=True, check=False
     ).stdout.strip()
@@ -766,7 +776,7 @@ def _write_gate_report(commands: dict[str, list[str]]) -> int:
         "| --- | --- | --- | --- |",
     ]
     for arm, code, seconds, _output in rows:
-        command = shlex.join(commands[arm])
+        command = _display_command(commands[arm])
         result = "pass" if code == 0 else f"**fail (exit {code})**"
         lines.append(f"| `{arm}` | `{command}` | {result} | {seconds:.2f} |")
     lines += [

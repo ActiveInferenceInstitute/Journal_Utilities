@@ -93,11 +93,12 @@ def index_failures(root: Path, documents: list[Path]) -> list[tuple[Path, int, s
         return [(docs_root, 0, "docs/README.md and docs/documentation-index.md must both exist")]
     hub_text, index_text = hub.read_text(encoding="utf-8"), index.read_text(encoding="utf-8")
     for document in documents:
-        if docs_root not in document.parents or document == hub:
+        if docs_root not in document.parents or document in (hub, index):
             continue
+        relative = document.relative_to(docs_root).as_posix()
         name = document.name
-        if f"]({name})" not in index_text:
-            failures.append((index, 0, f"does not list docs/{name}"))
+        if not any(f"]({target})" in index_text for target in (relative, name)):
+            failures.append((index, 0, f"does not list docs/{relative}"))
         if document.parent == docs_root and f"]({name})" not in hub_text:
             failures.append((hub, 0, f"does not link the docs/{name} guide"))
     return failures
