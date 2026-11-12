@@ -67,7 +67,9 @@ class TestSurrealDBClientConnection:
     @pytest.mark.asyncio
     async def test_connect_success(self, mock_surreal):
         """Test successful connection."""
-        with patch("journal_utilities.rag.graph.surreal_client.Surreal", return_value=mock_surreal):
+        with patch(
+            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
+        ):
             client = SurrealDBClient(
                 url="ws://test:8080",
                 namespace="ns",
@@ -85,7 +87,9 @@ class TestSurrealDBClientConnection:
     @pytest.mark.asyncio
     async def test_disconnect(self, mock_surreal):
         """Test disconnection."""
-        with patch("journal_utilities.rag.graph.surreal_client.Surreal", return_value=mock_surreal):
+        with patch(
+            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
+        ):
             client = SurrealDBClient(
                 url="ws://test:8080",
                 namespace="ns",
@@ -109,7 +113,7 @@ class TestSurrealDBClientEntities:
         mock.connect = AsyncMock()
         mock.signin = AsyncMock()
         mock.use = AsyncMock()
-        mock.query = AsyncMock(return_value=[{"result": []}])
+        mock.query = AsyncMock(return_value=[[]])
         mock.create = AsyncMock(return_value=[{"id": "entity:1"}])
         mock.update = AsyncMock()
         return mock
@@ -128,9 +132,11 @@ class TestSurrealDBClientEntities:
     @pytest.mark.asyncio
     async def test_create_new_entity(self, mock_surreal, sample_entity):
         """Test creating a new entity."""
-        mock_surreal.query = AsyncMock(return_value=[{"result": []}])  # No existing
+        mock_surreal.query = AsyncMock(return_value=[[]])  # No existing
 
-        with patch("journal_utilities.rag.graph.surreal_client.Surreal", return_value=mock_surreal):
+        with patch(
+            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
+        ):
             client = SurrealDBClient(
                 url="ws://test:8080",
                 namespace="ns",
@@ -150,20 +156,20 @@ class TestSurrealDBClientEntities:
         """Test updating an existing entity."""
         mock_surreal.query = AsyncMock(
             return_value=[
-                {
-                    "result": [
-                        {
-                            "id": "entity:existing",
-                            "confidence": 0.8,
-                            "context": ["old context"],
-                            "description": "Old description",
-                        }
-                    ]
-                }
+                [
+                    {
+                        "id": "entity:existing",
+                        "confidence": 0.8,
+                        "context": ["old context"],
+                        "description": "Old description",
+                    }
+                ]
             ]
         )
 
-        with patch("journal_utilities.rag.graph.surreal_client.Surreal", return_value=mock_surreal):
+        with patch(
+            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
+        ):
             client = SurrealDBClient(
                 url="ws://test:8080",
                 namespace="ns",
@@ -188,7 +194,7 @@ class TestSurrealDBClientTranscripts:
         mock.connect = AsyncMock()
         mock.signin = AsyncMock()
         mock.use = AsyncMock()
-        mock.query = AsyncMock(return_value=[{"result": []}])
+        mock.query = AsyncMock(return_value=[[]])
         mock.create = AsyncMock(return_value=[{"id": "transcript:1"}])
         mock.update = AsyncMock()
         return mock
@@ -205,7 +211,9 @@ class TestSurrealDBClientTranscripts:
     @pytest.mark.asyncio
     async def test_create_transcript(self, mock_surreal, sample_transcript):
         """Test creating a transcript."""
-        with patch("journal_utilities.rag.graph.surreal_client.Surreal", return_value=mock_surreal):
+        with patch(
+            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
+        ):
             client = SurrealDBClient(
                 url="ws://test:8080",
                 namespace="ns",
@@ -224,10 +232,12 @@ class TestSurrealDBClientTranscripts:
     async def test_get_unprocessed_transcripts(self, mock_surreal):
         """Test getting unprocessed transcript paths."""
         mock_surreal.query = AsyncMock(
-            return_value=[{"result": [{"source": "/path/1.txt"}, {"source": "/path/2.txt"}]}]
+            return_value=[[{"source": "/path/1.txt"}, {"source": "/path/2.txt"}]]
         )
 
-        with patch("journal_utilities.rag.graph.surreal_client.Surreal", return_value=mock_surreal):
+        with patch(
+            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
+        ):
             client = SurrealDBClient(
                 url="ws://test:8080",
                 namespace="ns",
@@ -253,7 +263,7 @@ class TestSurrealDBClientRelationships:
         mock.connect = AsyncMock()
         mock.signin = AsyncMock()
         mock.use = AsyncMock()
-        mock.query = AsyncMock(return_value=[{"result": [{"id": "entity:1"}]}])
+        mock.query = AsyncMock(return_value=[[{"id": "entity:1"}]])
         return mock
 
     @pytest.fixture
@@ -265,9 +275,11 @@ class TestSurrealDBClientRelationships:
     @pytest.mark.asyncio
     async def test_create_relationship_entities_not_found(self, mock_surreal, sample_relationship):
         """Test creating relationship when entities not found."""
-        mock_surreal.query = AsyncMock(return_value=[{"result": []}])  # No entities found
+        mock_surreal.query = AsyncMock(return_value=[[]])  # No entities found
 
-        with patch("journal_utilities.rag.graph.surreal_client.Surreal", return_value=mock_surreal):
+        with patch(
+            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
+        ):
             client = SurrealDBClient(
                 url="ws://test:8080",
                 namespace="ns",

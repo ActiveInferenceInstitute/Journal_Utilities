@@ -14,7 +14,7 @@ from types import TracebackType
 from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurreal, AsyncSurrealConnection
 
 
 def _redact_url(url: str) -> str:
@@ -53,7 +53,7 @@ class DatabaseClient:
             config: Database configuration. Uses environment variables if not provided.
         """
         self.config = config or DatabaseConfig.from_env()
-        self._db: AsyncSurreal | None = None
+        self._db: AsyncSurrealConnection | None = None
         self._connected = False
 
     async def connect(self) -> None:
@@ -77,12 +77,18 @@ class DatabaseClient:
             logging.info("Disconnected from database")
 
     async def query(self, sql: str, params: dict | None = None) -> list:
-        """Execute a query and return results."""
+        """Execute a query and return the rows of its first statement.
+
+        surrealdb 3.x answers ``query()`` with one entry per statement; every
+        caller here issues a single statement, so the rows are unpacked here
+        rather than at each call site.
+        """
         if not self._connected:
             await self.connect()
         assert self._db is not None  # connect() guarantees this
         result = await self._db.query(sql, params or {})
-        return result if result else []
+        rows: list = cast(list, result[0]) if result else []
+        return rows
 
     async def create(self, table: str, data: dict) -> Any:  # noqa: ANN401
         """Create a record in the specified table."""

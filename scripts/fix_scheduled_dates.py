@@ -29,14 +29,15 @@ async def fix_scheduled_dates() -> None:
         result = await db.query(
             "SELECT id, scheduled_date FROM session WHERE from_coda_json = TRUE AND scheduled_date IS NOT NONE"
         )
+        sessions = result[0] if result else []
 
-        if not result or len(result) == 0:
+        if not sessions:
             print("No sessions with scheduled_date found")
             return
 
         updated_count = 0
 
-        for session in result:
+        for session in sessions:
             session_id = session["id"]
             scheduled_date_str = session.get("scheduled_date", "")
 

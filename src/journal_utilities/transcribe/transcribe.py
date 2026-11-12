@@ -193,7 +193,7 @@ async def transcribe_and_update(transcription_service, db, session, wav_director
 
     Args:
         transcription_service (TranscriptionService): The transcription service instance.
-        db (Surreal): The database connection.
+        db (AsyncSurreal): The database connection.
         session (dict): The session information.
         wav_directory (str): The directory containing the WAV files.
         output_dir (str): Path to folder to store the json and txt files
@@ -266,9 +266,10 @@ async def process_untranscribed_sessions(
             result = await db.query(
                 "SELECT * FROM session WHERE transcribed = FALSE AND is_private != TRUE AND scheduled_date < time::now() - 1d;"
             )
+            sessions = result[0] if result else []
 
-            if result and len(result) > 0:
-                for session in result:
+            if sessions:
+                for session in sessions:
                     session_name = session.get("session_name")
                     if not session_name:
                         logger.warning(
@@ -309,11 +310,12 @@ async def download_and_transcribe(
         result = await db.query(
             "SELECT * FROM session WHERE session_name = $name", {"name": session_name}
         )
-        if not result or len(result) == 0:
+        rows = result[0] if result else []
+        if not rows:
             logger.error("Session with session_name %s not found in database", session_name)
             return
 
-        session = result[0]
+        session = rows[0]
 
         # Construct video URL from session_name
         video_url = f"https://www.youtube.com/watch?v={session_name}"

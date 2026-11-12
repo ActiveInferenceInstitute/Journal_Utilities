@@ -31,7 +31,10 @@ transcribe = [
 rag = [
     "cohere>=5.11.0",
     "structlog>=25.5.0",
-    "surrealdb>=1.0.6",
+    # 3.x is the async-client generation: it ships py.typed and exposes
+    # AsyncSurreal/AsyncSurrealConnection; connect()/query()/close() are all
+    # awaitables and query() answers one entry per statement.
+    "surrealdb>=3.0.0",
 ]
 transcribe-local = [
     "mlx-whisper>=0.4.0",
@@ -72,6 +75,10 @@ dev = [
 line-length = 100
 target-version = "py312"
 src = ["src"]
+# ruff ≥0.15 also formats Python code blocks inside Markdown. The guides under
+# src/ and docs/ are hand-curated and their snippets are deliberately
+# illustrative, so both lint and format stay scoped to Python sources.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = [
@@ -88,7 +95,13 @@ select = [
 # E501 (line-too-long) is enforced by the formatter (`ruff format`, the
 # `make format` gate), not the linter — turning it off here matches that split
 # and keeps `make lint` meaningful rather than reformatting-driven.
-ignore = ["E501"]
+#
+# UP042 (ruff 0.17) rewrites `class X(str, Enum)` as `class X(StrEnum)`, which
+# changes `str(member)` from "X.MEMBER" to the bare value — a runtime change in
+# log lines, f-strings and SurrealQL interpolation. The nine affected enums
+# keep their explicit `(str, Enum)` base until that refactor is done on purpose
+# with those call sites re-verified.
+ignore = ["E501", "UP042"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ANN", "E402"]
@@ -112,9 +125,9 @@ disallow_untyped_defs = true
 # modules); high-value strict checks (no-any-return, union-attr, no-untyped-def,
 # operator) remain enabled.
 disallow_any_generics = false
-# Third-party SDKs (surrealdb, pyytdata, mlx_whisper, cohere, whisperx) ship
-# without stubs; typing them is out of our control, so don't fail the gate on
-# their missing stubs.
+# Third-party SDKs (pyytdata, mlx_whisper, cohere, whisperx) ship without
+# stubs; typing them is out of our control, so don't fail the gate on their
+# missing stubs. surrealdb is typed (py.typed) since the 3.x migration.
 disable_error_code = ["import-untyped", "import-not-found"]
 
 [[tool.mypy.overrides]]

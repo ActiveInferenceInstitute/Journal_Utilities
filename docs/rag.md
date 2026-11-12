@@ -38,6 +38,12 @@ Manages interaction with SurrealDB.
 - **Nodes**: Stores entities as graph nodes (e.g., `person:karl_friston`).
 - **Edges**: Stores relationships as graph edges (e.g., `authored` -> `concept:free_energy_principle`).
 - **Idempotency**: Ensures entities are merged rather than duplicated.
+- **SDK**: `surrealdb>=3.0.0` (the async-client generation). `SurrealDBClient` opens the
+  connection with `AsyncSurreal`, types it as `AsyncSurrealConnection`, and awaits
+  `connect()` / `signin()` / `use()` / `query()` / `close()`. `query()` answers one entry
+  per statement, so single-statement queries are unwrapped to their rows
+  (`_first_statement`) before use; `create()` on a table answers with the created records.
+  Server-side, the SDK accepts SurrealDB 2.x and newer and refuses older servers.
 
 ## Pipeline (`main.py`)
 

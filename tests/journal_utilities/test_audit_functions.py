@@ -34,9 +34,9 @@ def _make_mock_surreal(query_return_value=None):
     mock.use = AsyncMock()
     mock.close = AsyncMock()
     mock.create = AsyncMock(return_value={"id": "audit:1"})
-    mock.query = AsyncMock(
-        return_value=query_return_value if query_return_value is not None else []
-    )
+    # surrealdb 3.x answers query() with one entry per statement.
+    rows = query_return_value if query_return_value is not None else []
+    mock.query = AsyncMock(return_value=[rows])
     return mock
 
 
@@ -136,7 +136,7 @@ async def test_get_import_summary_calculates(
     ]
 
     mock = _make_mock_surreal()
-    mock.query = AsyncMock(side_effect=[[], individual_records])
+    mock.query = AsyncMock(side_effect=[[[]], [individual_records]])
     with patch(DB_PATCH_TARGET, return_value=mock):
         summary = await get_import_summary(
             "run_123", db_url, db_user, db_password, db_name, db_namespace
@@ -221,11 +221,11 @@ async def test_rollback_import(
         side_effect=[
             # 1. Get successful inserts for this run (audit carries the
             #    created session id in result_data)
-            [{"id": "audit:1", "session_name": "Session A", "result_data": {"id": "session:1"}}],
+            [[{"id": "audit:1", "session_name": "Session A", "result_data": {"id": "session:1"}}]],
             # 2. DELETE the exact session record
-            [],
+            [[]],
             # 3. UPDATE the audit record to rolled_back
-            [],
+            [[]],
         ]
     )
 

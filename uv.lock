@@ -1411,7 +1411,7 @@ requires-dist = [
     { name = "pyytdata", specifier = ">=0.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
     { name = "structlog", marker = "extra == 'rag'", specifier = ">=25.5.0" },
-    { name = "surrealdb", marker = "extra == 'rag'", specifier = ">=1.0.6" },
+    { name = "surrealdb", marker = "extra == 'rag'", specifier = ">=3.0.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'interface'", specifier = ">=0.34.0" },
     { name = "whisperx", marker = "extra == 'transcribe'", git = "https://github.com/m-bain/whisperX.git" },
     { name = "youtube-transcript-api", specifier = ">=0.6.0" },

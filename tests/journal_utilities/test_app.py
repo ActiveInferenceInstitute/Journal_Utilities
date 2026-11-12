@@ -14,6 +14,7 @@ import pytest
 pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
+from journal_utilities.interface import chat_engine
 from journal_utilities.interface.app import create_app
 
 # ---------------------------------------------------------------------------
@@ -383,12 +384,17 @@ class TestSearchEndpointAdditional:
 class TestChatEndpointsAdditional:
     """Additional chat endpoint tests."""
 
-    def test_chat_with_valid_message_returns_response(self, test_client: TestClient):
+    def test_chat_with_valid_message_returns_response(
+        self, test_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ):
         """POST /api/chat with a valid message returns a graceful response.
 
         With no Ollama reachable the endpoint returns 200 with a sanitized
-        generic error — it must not leak raw exception detail.
+        generic error — it must not leak raw exception detail. The endpoint is
+        pointed at a dead port so a developer machine running `ollama serve`
+        still exercises the offline path instead of a live model's answer.
         """
+        monkeypatch.setattr(chat_engine, "OLLAMA_BASE_URL", "http://127.0.0.1:1")
         resp = test_client.post(
             "/api/chat",
             json={

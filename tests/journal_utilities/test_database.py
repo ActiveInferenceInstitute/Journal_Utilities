@@ -106,7 +106,8 @@ class TestDatabaseClient:
     @pytest.mark.asyncio
     async def test_query(self, mock_surreal, config):
         """Test query execution."""
-        mock_surreal.query.return_value = [{"id": "test:1", "name": "test"}]
+        # surrealdb 3.x answers query() with one entry per statement.
+        mock_surreal.query.return_value = [[{"id": "test:1", "name": "test"}]]
 
         with patch("journal_utilities.data.database.AsyncSurreal", return_value=mock_surreal):
             client = DatabaseClient(config)
@@ -179,12 +180,14 @@ class TestAuditFunctions:
     async def test_get_recent_runs(self, mock_surreal, db_params):
         """get_recent_import_runs returns formatted list."""
         mock_surreal.query.return_value = [
-            {
-                "import_run_id": "run_1",
-                "timestamp": "2025-01-01T00:00:00",
-                "source_file": "/data/coda.json",
-                "result_data": {"total": 10},
-            }
+            [
+                {
+                    "import_run_id": "run_1",
+                    "timestamp": "2025-01-01T00:00:00",
+                    "source_file": "/data/coda.json",
+                    "result_data": {"total": 10},
+                }
+            ]
         ]
         with patch(self.DB_PATCH, return_value=mock_surreal):
             from journal_utilities.data.database import get_recent_import_runs
@@ -197,7 +200,7 @@ class TestAuditFunctions:
     async def test_get_import_summary(self, mock_surreal, db_params):
         """get_import_summary returns stats from summary record."""
         mock_surreal.query.return_value = [
-            {"result_data": {"total": 20, "inserted": 15, "skipped": 3, "failed": 2}}
+            [{"result_data": {"total": 20, "inserted": 15, "skipped": 3, "failed": 2}}]
         ]
         with patch(self.DB_PATCH, return_value=mock_surreal):
             from journal_utilities.data.database import get_import_summary
@@ -209,13 +212,15 @@ class TestAuditFunctions:
     async def test_get_failed_imports(self, mock_surreal, db_params):
         """get_failed_imports returns failure details."""
         mock_surreal.query.return_value = [
-            {
-                "session_name": "Fail Session",
-                "operation": "insert",
-                "error_message": "Duplicate",
-                "timestamp": "2025-01-01T01:00:00",
-                "data_attempted": {},
-            }
+            [
+                {
+                    "session_name": "Fail Session",
+                    "operation": "insert",
+                    "error_message": "Duplicate",
+                    "timestamp": "2025-01-01T01:00:00",
+                    "data_attempted": {},
+                }
+            ]
         ]
         with patch(self.DB_PATCH, return_value=mock_surreal):
             from journal_utilities.data.database import get_failed_imports

@@ -5,12 +5,26 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 import structlog
-from surrealdb import Surreal
+from surrealdb import AsyncSurreal, AsyncSurrealConnection
 
 from journal_utilities.rag.models import Entity, Relationship, Transcript
 from journal_utilities.rag.settings import settings
 
 logger = structlog.get_logger(__name__)
+
+
+def _first_statement(result: Sequence[Any]) -> list[Any]:
+    """Rows produced by the first statement of a ``query()`` response.
+
+    surrealdb 3.x answers ``query()`` with one entry per statement, so a
+    single-statement query arrives as ``[rows]``. Every caller here issues one
+    statement and wants those rows, which is the shape the pre-3.x client
+    returned directly.
+    """
+    if not result:
+        return []
+    rows = result[0]
+    return rows if isinstance(rows, list) else []
 
 
 class SurrealDBClient:
@@ -38,7 +52,7 @@ class SurrealDBClient:
         self.database = database or settings.surrealdb_database
         self.username = username or settings.surrealdb_username
         self.password = password or settings.surrealdb_password
-        self.db: Surreal | None = None
+        self.db: AsyncSurrealConnection | None = None
         logger.info(
             "Initialized SurrealDBClient",
             namespace=self.namespace,
@@ -48,7 +62,7 @@ class SurrealDBClient:
     async def connect(self) -> None:
         """Connect to SurrealDB."""
         try:
-            self.db = Surreal(self.url)
+            self.db = AsyncSurreal(self.url)
             await self.db.connect()
             await self.db.signin({"user": self.username, "pass": self.password})
             await self.db.use(self.namespace, self.database)
@@ -134,38 +148,39 @@ class SurrealDBClient:
             entity_type = entity.type.value if hasattr(entity.type, "value") else entity.type
             source = (entity.metadata or {}).get("source")
             if source:
-                existing = await self.db.query(
-                    "SELECT * FROM entity WHERE name = $name AND type = $type AND source = $source",
-                    {"name": entity.name, "type": entity_type, "source": source},
+                existing = _first_statement(
+                    await self.db.query(
+                        "SELECT * FROM entity WHERE name = $name AND type = $type"
+                        " AND source = $source",
+                        {"name": entity.name, "type": entity_type, "source": source},
+                    )
                 )
             else:
-                existing = await self.db.query(
-                    "SELECT * FROM entity WHERE name = $name AND type = $type",
-                    {"name": entity.name, "type": entity_type},
+                existing = _first_statement(
+                    await self.db.query(
+                        "SELECT * FROM entity WHERE name = $name AND type = $type",
+                        {"name": entity.name, "type": entity_type},
+                    )
                 )
 
-            if existing and existing[0]["result"]:
+            if existing:
                 # Update existing entity
-                entity_id = existing[0]["result"][0]["id"]
+                current = existing[0]
+                entity_id = current["id"]
                 await self.db.update(
                     entity_id,
                     {
                         "mentions": entity.mentions,
-                        "confidence": max(
-                            entity.confidence, existing[0]["result"][0]["confidence"]
-                        ),
-                        "context": list(set(entity.context + existing[0]["result"][0]["context"])),
-                        "description": entity.description
-                        or existing[0]["result"][0]["description"],
+                        "confidence": max(entity.confidence, current["confidence"]),
+                        "context": list(set(entity.context + current["context"])),
+                        "description": entity.description or current["description"],
                     },
                 )
                 logger.debug("Updated entity", entity_id=entity_id)
                 return str(entity_id)
             else:
                 # Create new entity
-                from datetime import datetime
-
-                payload = {
+                payload: dict[str, Any] = {
                     "name": entity.name,
                     "type": entity_type,
                     "description": entity.description,
@@ -177,8 +192,9 @@ class SurrealDBClient:
                 }
                 if source:
                     payload["source"] = source
-                result = await self.db.create("entity", payload)
-                entity_id = result[0]["id"]
+                # ``create`` on a table answers with the created records.
+                created = cast(list[dict[str, Any]], await self.db.create("entity", payload))
+                entity_id = created[0]["id"]
                 logger.debug("Created entity", entity_id=entity_id)
                 return str(entity_id)
 
@@ -211,44 +227,50 @@ class SurrealDBClient:
                 else relationship.target
             )
 
-            source = await self.db.query(
-                "SELECT id FROM entity WHERE name = $name LIMIT 1",
-                {"name": source_name},
+            source = _first_statement(
+                await self.db.query(
+                    "SELECT id FROM entity WHERE name = $name LIMIT 1",
+                    {"name": source_name},
+                )
             )
-            target = await self.db.query(
-                "SELECT id FROM entity WHERE name = $name LIMIT 1",
-                {"name": target_name},
+            target = _first_statement(
+                await self.db.query(
+                    "SELECT id FROM entity WHERE name = $name LIMIT 1",
+                    {"name": target_name},
+                )
             )
 
-            if not source[0]["result"] or not target[0]["result"]:
+            if not source or not target:
                 raise ValueError("Source or target entity not found")
 
-            source_id = source[0]["result"][0]["id"]
-            target_id = target[0]["result"][0]["id"]
+            source_id = source[0]["id"]
+            target_id = target[0]["id"]
 
             # Create relationship
-            result = await self.db.query(
-                f"""
-                RELATE {source_id}->relates->{target_id} CONTENT {{
-                    relationship_type: $type,
-                    description: $description,
-                    confidence: $confidence,
-                    context: $context,
-                    metadata: $metadata,
-                    created_at: $created_at
-                }}
-                """,
-                {
-                    "type": relationship.relationship_type,
-                    "description": relationship.description,
-                    "confidence": relationship.confidence,
-                    "context": relationship.context,
-                    "metadata": relationship.metadata,
-                    "created_at": datetime.now(UTC).isoformat(),
-                },
+            result = _first_statement(
+                await self.db.query(
+                    f"""
+                    RELATE {source_id}->relates->{target_id} CONTENT {{
+                        relationship_type: $type,
+                        description: $description,
+                        confidence: $confidence,
+                        context: $context,
+                        metadata: $metadata,
+                        created_at: $created_at
+                    }}
+                    """,
+                    {
+                        "type": relationship.relationship_type,
+                        "description": relationship.description,
+                        "confidence": relationship.confidence,
+                        "context": relationship.context,
+                        "metadata": relationship.metadata,
+                        "created_at": datetime.now(UTC).isoformat(),
+                    },
+                )
             )
 
-            rel_id = result[0]["result"][0]["id"]
+            rel_id = result[0]["id"]
             logger.debug("Created relationship", relationship_id=rel_id)
             return str(rel_id)
 
@@ -274,19 +296,22 @@ class SurrealDBClient:
             raise RuntimeError("Database not connected")
 
         try:
-            result = await self.db.create(
-                "transcript",
-                {
-                    "title": transcript.title,
-                    "date": transcript.date.isoformat(),
-                    "content": transcript.content,
-                    "source": transcript.source,
-                    "metadata": transcript.metadata,
-                    "processed": transcript.processed,
-                    "created_at": transcript.created_at.isoformat(),
-                },
+            created = cast(
+                list[dict[str, Any]],
+                await self.db.create(
+                    "transcript",
+                    {
+                        "title": transcript.title,
+                        "date": transcript.date.isoformat(),
+                        "content": transcript.content,
+                        "source": transcript.source,
+                        "metadata": transcript.metadata,
+                        "processed": transcript.processed,
+                        "created_at": transcript.created_at.isoformat(),
+                    },
+                ),
             )
-            transcript_id = result[0]["id"]
+            transcript_id = created[0]["id"]
             logger.info("Created transcript", transcript_id=transcript_id)
             return str(transcript_id)
 
@@ -311,18 +336,22 @@ class SurrealDBClient:
 
         try:
             if entity_type:
-                result = await self.db.query(
-                    "SELECT * FROM entity WHERE name = $name AND type = $type LIMIT 1",
-                    {"name": name, "type": entity_type},
+                rows = _first_statement(
+                    await self.db.query(
+                        "SELECT * FROM entity WHERE name = $name AND type = $type LIMIT 1",
+                        {"name": name, "type": entity_type},
+                    )
                 )
             else:
-                result = await self.db.query(
-                    "SELECT * FROM entity WHERE name = $name LIMIT 1",
-                    {"name": name},
+                rows = _first_statement(
+                    await self.db.query(
+                        "SELECT * FROM entity WHERE name = $name LIMIT 1",
+                        {"name": name},
+                    )
                 )
 
-            if result and result[0]["result"]:
-                return cast(dict[str, Any], result[0]["result"][0])
+            if rows:
+                return cast(dict[str, Any], rows[0])
             return None
 
         except Exception as e:
@@ -345,8 +374,8 @@ class SurrealDBClient:
             raise RuntimeError("Database not connected")
 
         try:
-            result = await self.db.query(query, params or {})
-            return cast(Sequence[Mapping[str, Any]], result)
+            result = await self.db.query(query, dict(params) if params else None)
+            return cast(Sequence[Mapping[str, Any]], _first_statement(result))
         except Exception as e:
             logger.error("Query failed", query=query, error=str(e))
             raise
@@ -364,13 +393,15 @@ class SurrealDBClient:
             raise RuntimeError("Database not connected")
 
         try:
-            result = await self.db.query(
-                "SELECT * FROM transcript WHERE source = $source LIMIT 1",
-                {"source": source_path},
+            rows = _first_statement(
+                await self.db.query(
+                    "SELECT * FROM transcript WHERE source = $source LIMIT 1",
+                    {"source": source_path},
+                )
             )
 
-            if result and result[0]["result"]:
-                return cast(dict[str, Any], result[0]["result"][0])
+            if rows:
+                return cast(dict[str, Any], rows[0])
             return None
 
         except Exception as e:
@@ -387,10 +418,12 @@ class SurrealDBClient:
             raise RuntimeError("Database not connected")
 
         try:
-            result = await self.db.query("SELECT source FROM transcript WHERE processed = false")
+            rows = _first_statement(
+                await self.db.query("SELECT source FROM transcript WHERE processed = false")
+            )
 
-            if result and result[0]["result"]:
-                return [rec["source"] for rec in result[0]["result"] if rec.get("source")]
+            if rows:
+                return [rec["source"] for rec in rows if rec.get("source")]
             return []
 
         except Exception as e:
