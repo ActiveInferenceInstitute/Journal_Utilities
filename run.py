@@ -595,6 +595,7 @@ GATE_ARMS = ("lint", "format", "types", "test", "docs", "gnn")
 #: Arms `gate report` measures: everything above plus the network/coverage arm.
 GATE_REPORT_ARMS = ("lint", "format", "types", "test", "test-full", "docs", "gnn")
 GATE_REPORT_PATH = PROJECT_ROOT / "docs" / "_generated" / "gate-arms.md"
+GATE_BASELINE_PATH = PROJECT_ROOT / "docs" / "gate-baseline.json"
 GATE_GNN_SCRIPT = PROJECT_ROOT / "scripts" / "gnn_conformance.py"
 GATE_DOCS_SCRIPT = PROJECT_ROOT / "scripts" / "check_docs_links.py"
 
@@ -660,13 +661,20 @@ def gate_env(arm: str) -> dict[str, str]:
 
     `test` mirrors a hosted runner: the live-network download tests skip
     themselves when `CI` is set (see `tests/journal_utilities/test_downloader.py`),
-    so the default arm is the same selection CI exercises. `test-full` leaves
-    `CI` alone and runs every test this host can reach.
+    so the default arm is the same selection CI exercises. `test-full` removes
+    `CI` on purpose — it must run every test this host can reach even when the
+    caller's shell (or this very session) exports `CI=true`.
     """
     env = dict(os.environ)
     if arm == "test":
         env["CI"] = "true"
+    elif arm == "test-full":
+        env.pop("CI", None)
     return env
+
+
+#: How each arm's environment differs from the caller's; also printed by `report`.
+GATE_ENV_NOTES = {"test": "sets `CI=true`", "test-full": "unsets `CI`"}
 
 
 def _toolchain_problem(python: str) -> str:
@@ -733,6 +741,71 @@ def _display_command(command: list[str]) -> str:
     return shlex.join(relative)
 
 
+def _load_gate_baseline(path: Path) -> dict[str, tuple[str | None, float | None, str | None]]:
+    """Recorded pre-gate command, wall time and summary per arm (empty when absent)."""
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    arms = document.get("arms") if isinstance(document, dict) else None
+    if not isinstance(arms, dict):
+        return {}
+    recorded: dict[str, tuple[str | None, float | None, str | None]] = {}
+    for name, entry in arms.items():
+        if not isinstance(name, str) or not isinstance(entry, dict):
+            continue
+        command = entry.get("command")
+        seconds = entry.get("wall_seconds")
+        summary = entry.get("summary")
+        recorded[name] = (
+            command if isinstance(command, str) else None,
+            float(seconds) if isinstance(seconds, (int, float)) else None,
+            summary if isinstance(summary, str) else None,
+        )
+    return recorded
+
+
+def _load_gate_comparison(path: Path) -> tuple[float, float, str] | None:
+    """The same-command comparison recorded beside the baseline arms."""
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    comparison = document.get("same_command_comparison") if isinstance(document, dict) else None
+    if not isinstance(comparison, dict):
+        return None
+    before, after = comparison.get("before_wall_seconds"), comparison.get("after_wall_seconds")
+    summary = comparison.get("summary")
+    if not isinstance(before, (int, float)) or not isinstance(after, (int, float)):
+        return None
+    return float(before), float(after), summary if isinstance(summary, str) else ""
+
+
+def _arm_evidence(output: str) -> tuple[str, str]:
+    """The result line an arm printed, and its coverage total when it reported one."""
+    import re
+
+    result, coverage = "", ""
+    for line in output.splitlines():
+        stripped = line.strip()
+        outcome = re.match(r"^=+ (?P<result>.*\b(?:passed|failed|error)\b.*?) =+$", stripped)
+        if outcome:
+            result = outcome.group("result").strip()
+            continue
+        total = re.match(r"^TOTAL\s+(?P<row>.+)$", stripped)
+        if total:
+            coverage = "TOTAL " + total.group("row").strip()
+    if result:
+        return result, coverage
+    last = [line.strip() for line in output.splitlines() if line.strip()]
+    return (last[-1] if last else ""), coverage
+
+
+def _seconds(value: float | None) -> str:
+    """A wall time for the report, or an em dash when it was never measured."""
+    return "—" if value is None else f"{value:.2f}"
+
+
 def _write_gate_report(commands: dict[str, list[str]]) -> int:
     """Measure every arm once and regenerate docs/_generated/gate-arms.md."""
     import platform
@@ -748,21 +821,23 @@ def _write_gate_report(commands: dict[str, list[str]]) -> int:
         encoding="utf-8",
     )
 
-    rows = [(arm, *_run_gate_arm(arm, commands[arm])) for arm in GATE_REPORT_ARMS]
+    baseline = _load_gate_baseline(GATE_BASELINE_PATH)
+    comparison = _load_gate_comparison(GATE_BASELINE_PATH)
+    measured = {arm: _run_gate_arm(arm, commands[arm]) for arm in GATE_REPORT_ARMS}
     uv_version = subprocess.run(
         ["uv", "--version"], capture_output=True, text=True, check=False
     ).stdout.strip()
+
     lines = [
         "# Gate arms — measured wall time",
         "",
         "<!-- generated by `uv run python run.py gate report`; never hand-edit a number here -->",
         "",
-        "One run per arm on the host that produced this file. The `test` arm is the CI",
-        "selection (live-network download tests skip when `CI` is set); `test-full` runs",
-        "everything this host can reach, including those network downloads, so its number",
-        "varies with the network. The `gnn` arm installs the pinned parser into a throwaway",
-        "`uv` environment on first use. Runs are warm-cache: the mypy and uv caches",
-        "from earlier runs are reused.",
+        "One run per arm on the host below. `test` is the CI selection (live-network",
+        "download tests skip when `CI` is set); `test-full` runs everything this host can",
+        "reach, including those network downloads, so its time varies with the network.",
+        "Runs are warm-cache: the mypy and uv caches from earlier runs are reused, which",
+        "flatters `types` and `gnn` relative to their first run after a change.",
         "",
         "| Field | Value |",
         "| --- | --- |",
@@ -772,27 +847,74 @@ def _write_gate_report(commands: dict[str, list[str]]) -> int:
         f"| Commit | `{_git_revision()}` |",
         f"| Measured | {datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')} |",
         "",
-        "| Arm | Command | Result | Wall time (s) |",
-        "| --- | --- | --- | --- |",
+        "## Before and after",
+        "",
+        "Before values are the recorded observations in "
+        "[`../gate-baseline.json`](../gate-baseline.json): the same checks run as raw",
+        "commands before the gate entry point existed. An em dash means the check did not",
+        "exist, so no honest comparison is possible.",
+        "",
+        "| Arm | Before (s) | After (s) | Δ (s) | After result |",
+        "| --- | --- | --- | --- | --- |",
     ]
-    for arm, code, seconds, _output in rows:
-        command = _display_command(commands[arm])
-        result = "pass" if code == 0 else f"**fail (exit {code})**"
-        lines.append(f"| `{arm}` | `{command}` | {result} | {seconds:.2f} |")
+    for arm in GATE_REPORT_ARMS:
+        code, seconds, output = measured[arm]
+        _before_command, before_seconds, _before_summary = baseline.get(arm, (None, None, None))
+        delta = "—" if before_seconds is None else f"{seconds - before_seconds:+.2f}"
+        result, _coverage = _arm_evidence(output)
+        status = "pass" if code == 0 else f"**fail (exit {code})**"
+        lines.append(
+            f"| `{arm}` | {_seconds(before_seconds)} | {seconds:.2f} | {delta} "
+            f"| {status}{': ' + result if result else ''} |"
+        )
+
     lines += [
         "",
-        "Test counts and coverage come from the arm output; `test-full` reports coverage",
-        "over `src/` because the arm passes `--cov=src --cov-report=term-missing`.",
+        "## Test evidence",
         "",
+        "| Arm | Result | Coverage |",
+        "| --- | --- | --- |",
     ]
-    GATE_REPORT_PATH.write_text("\n".join(lines), encoding="utf-8")
+    for arm in GATE_REPORT_ARMS:
+        _code, _seconds_taken, output = measured[arm]
+        result, coverage = _arm_evidence(output)
+        lines.append(f"| `{arm}` | {result or '—'} | {coverage or '—'} |")
+
+    if comparison is not None:
+        before, after, summary = comparison
+        lines += [
+            "",
+            "## Same command, coverage removed",
+            "",
+            f"`{summary or 'measured command'}`: {before:.2f} s → {after:.2f} s measured",
+            "back-to-back, which isolates the effect of taking `--cov=src` out of pytest's",
+            "`addopts` from run-to-run variance.",
+        ]
+
+    lines += [
+        "",
+        "## Commands",
+        "",
+        "| Arm | After command | Environment | Before command |",
+        "| --- | --- | --- | --- |",
+    ]
+    for arm in GATE_REPORT_ARMS:
+        before_command = baseline.get(arm, (None, None, None))[0]
+        environment = GATE_ENV_NOTES.get(arm, "inherits the caller's")
+        lines.append(
+            f"| `{arm}` | `{_display_command(commands[arm])}` | {environment} "
+            f"| {f'`{before_command}`' if before_command else '—'} |"
+        )
+
+    GATE_REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"wrote {GATE_REPORT_PATH.relative_to(PROJECT_ROOT)}")
-    return 0 if all(code == 0 for _arm, code, _seconds, _output in rows) else 1
+    return 0 if all(code == 0 for code, _s, _o in measured.values()) else 1
 
 
 def cmd_gate(_config: configparser.ConfigParser, args: argparse.Namespace) -> int:
     """Run gate arms by name (see `docs/RUN_GUIDE.md`)."""
     import shlex
+
     selected: list[str] = args.arms or ["all"]
     commands = gate_commands()
 

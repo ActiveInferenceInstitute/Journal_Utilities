@@ -41,6 +41,7 @@ from it.
 ## Gates, CI, and generated evidence
 
 - [`RUN_GUIDE.md`](RUN_GUIDE.md) — arms, environment, and how CI calls them
+- [`gate-baseline.json`](gate-baseline.json) — recorded pre-gate readings that `run.py gate report` consumes
 - [`_generated/gate-arms.md`](_generated/gate-arms.md) — measured per-arm wall time (generated)
 - [`../.github/README.md`](../.github/README.md) — workflows, Dependabot, local checks
 - [`../.github/GNN.md`](../.github/GNN.md) — what the pinned GNN conformance job parses
