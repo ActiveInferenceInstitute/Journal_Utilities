@@ -13,8 +13,8 @@ flatters `types` and `gnn` relative to their first run after a change.
 | Host | `macOS-27.0.1-arm64-arm-64bit` |
 | Python | `3.12.16` |
 | uv | `uv 0.13.7 (Homebrew 2026-11-03 aarch64-apple-darwin)` |
-| Commit | `23feab7` |
-| Measured | 2026-11-12T13:14:04Z |
+| Commit | `1d8945a` |
+| Measured | 2026-11-12T13:16:07Z |
 
 ## Before and after
 
@@ -24,13 +24,13 @@ exist, so no honest comparison is possible.
 
 | Arm | Before (s) | After (s) | Δ (s) | After result |
 | --- | --- | --- | --- | --- |
-| `lint` | 0.33 | 0.04 | -0.29 | pass: All checks passed! |
-| `format` | 0.06 | 0.04 | -0.02 | pass: 142 files already formatted |
-| `types` | 12.91 | 0.53 | -12.38 | pass: Success: no issues found in 54 source files |
-| `test` | 42.67 | 12.28 | -30.39 | pass: 682 passed, 15 skipped, 2 warnings in 11.20s |
-| `test-full` | 104.21 | 58.47 | -45.74 | pass: 692 passed, 5 skipped, 2 warnings in 56.75s |
-| `docs` | — | 1.45 | — | pass: OK: 790 tracked Markdown file(s), links and docs index consistent |
-| `gnn` | — | 2.24 | — | pass: {"gnn-version": "5.0.3", "models": 1, "pin-revision": "8f293d9ba810e6eda5c09842d9c7ed9ffa5f92c1", "pin-tag": "v5.0.3", "result": "verified", "source": "pinned-exemplar"} |
+| `lint` | 0.33 | 0.07 | -0.26 | pass: All checks passed! |
+| `format` | 0.06 | 0.06 | -0.00 | pass: 142 files already formatted |
+| `types` | 12.91 | 0.90 | -12.01 | pass: Success: no issues found in 54 source files |
+| `test` | 42.67 | 17.02 | -25.65 | pass: 682 passed, 15 skipped, 2 warnings in 15.26s |
+| `test-full` | 104.21 | 62.51 | -41.70 | pass: 692 passed, 5 skipped, 2 warnings in 60.60s (0:01:00) |
+| `docs` | — | 1.60 | — | pass: OK: 790 tracked Markdown file(s), links and docs index consistent |
+| `gnn` | — | 1.68 | — | pass: {"gnn-version": "5.0.3", "models": 1, "pin-revision": "8f293d9ba810e6eda5c09842d9c7ed9ffa5f92c1", "pin-tag": "v5.0.3", "result": "verified", "source": "pinned-exemplar"} |
 
 ## Test evidence
 
@@ -39,8 +39,8 @@ exist, so no honest comparison is possible.
 | `lint` | All checks passed! | — |
 | `format` | 142 files already formatted | — |
 | `types` | Success: no issues found in 54 source files | — |
-| `test` | 682 passed, 15 skipped, 2 warnings in 11.20s | — |
-| `test-full` | 692 passed, 5 skipped, 2 warnings in 56.75s | TOTAL 4780   1039    78% |
+| `test` | 682 passed, 15 skipped, 2 warnings in 15.26s | — |
+| `test-full` | 692 passed, 5 skipped, 2 warnings in 60.60s (0:01:00) | TOTAL 4780   1039    78% |
 | `docs` | OK: 790 tracked Markdown file(s), links and docs index consistent | — |
 | `gnn` | {"gnn-version": "5.0.3", "models": 1, "pin-revision": "8f293d9ba810e6eda5c09842d9c7ed9ffa5f92c1", "pin-tag": "v5.0.3", "result": "verified", "source": "pinned-exemplar"} | — |
 
