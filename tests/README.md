@@ -1,23 +1,27 @@
 # Tests
 
-Test suite for Journal-Utilities (currently 475 passed / 3 skipped, snapshot of
-`uv run pytest tests/ -q` on 2026-08-02). The count
-is a live snapshot of the suite — run `uv run pytest tests/ -q` for the current
-number; it is intentionally not kept hardcoded elsewhere in the docs.
+Test suite for Journal-Utilities. Counts and coverage are not written into this
+file: they change with the suite, so they are measured and recorded in
+[`../docs/_generated/gate-arms.md`](../docs/_generated/gate-arms.md) by
+`uv run python run.py gate report`.
 
 ## Running Tests
 
 ```bash
-# All tests
-uv run pytest tests/ -v
+# The CI selection (live-network downloads skip themselves; `CI=true`)
+uv run python run.py gate test
 
-# With coverage
-uv run pytest tests/ -v --cov=src --cov-report=term-missing
+# Everything this host can reach, with coverage
+uv run python run.py gate test-full
+
+# Same commands through pytest directly
+uv run pytest tests/ -q
+uv run pytest tests/ -q --cov=src --cov-report=term-missing
 
 # Specific suites
-uv run pytest tests/journal_utilities/ -v            # Download + transcription pipeline
-uv run pytest tests/journal_utilities/rag/ -v        # Entity extraction (RAG)
-uv run pytest tests/journal_utilities/rag/unit/ -v   # RAG unit tests only
+uv run pytest tests/journal_utilities/ -q            # Download + transcription pipeline
+uv run pytest tests/journal_utilities/rag/ -q        # Entity extraction (RAG)
+uv run pytest tests/journal_utilities/rag/unit/ -q   # RAG unit tests only
 ```
 
 ## Test Structure
@@ -93,7 +97,8 @@ uv run pytest tests/journal_utilities/rag/integration/ -v -s
 
 ## Coverage
 
-The suite runs with coverage against `src` by default
-(`--cov=src --cov-report=term-missing`). Per-package line coverage changes as
-the suite evolves; run `uv run pytest tests/ --cov-report=term-missing` to see
-the live numbers.
+Coverage is opt-in (`--cov=src --cov-report=term-missing`); pytest's `addopts` no
+longer turns it on for every run. The `test-full` gate arm and
+`uv run python run.py gate report` are where the numbers are produced. Per-package
+line coverage changes as the suite evolves; run
+`uv run pytest tests/ --cov-report=term-missing` to see the live numbers.

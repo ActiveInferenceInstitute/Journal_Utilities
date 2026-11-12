@@ -1,5 +1,5 @@
-# Pre-commit gates — must mirror the CI surface in .github/workflows/test.yml
-# (required check `test`): ruff check, ruff format, mypy on src.
+# Pre-commit gates — mirror the `gate` job in .github/workflows/test.yml:
+# ruff check, ruff format, mypy on src (the same arms `run.py gate` runs).
 # Replaces black: ruff format is the repo formatter (see [tool.ruff] in
 # pyproject.toml); the black config/dev-dep removal is tracked in TODO.md.
 

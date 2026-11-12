@@ -63,10 +63,10 @@ clean:
 	rm -rf build dist *.egg-info
 
 test:
-	uv run pytest tests/
+	uv run python run.py gate test
 
 lint:
-	uv run ruff check src/ tests/ scripts/
+	uv run python run.py gate lint format
 
 format:
 	uv run ruff format src/ tests/

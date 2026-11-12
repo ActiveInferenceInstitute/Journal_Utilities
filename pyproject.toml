@@ -113,7 +113,10 @@ ignore = ["E501", "UP042"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 python_files = ["test_*.py"]
-addopts = "-v --cov=src --cov-report=term-missing"
+# Coverage is opt-in: the `test` gate arm stays fast, and `test-full` (plus
+# `uv run pytest --cov=src`) is where coverage is measured. Keep `-v` so a bare
+# pytest run still names each test.
+addopts = "-v"
 
 [tool.mypy]
 python_version = "3.12"
