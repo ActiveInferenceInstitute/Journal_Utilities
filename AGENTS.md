@@ -35,7 +35,7 @@ must be passed explicitly when operating outside the default layout.
 1. **Configuration First**: Never hardcode paths or settings. Use `config.ini` (via `run.py` config loader).
 2. **Modular Docs**: If you modify a module (e.g., `rag`), you **MUST** update its corresponding doc file (`docs/rag.md`).
 3. **Linting**: Ensure all markdown and python code is lint-free.
-4. **Testing**: Run `uv run pytest` before submitting changes.
+4. **Testing**: Run `uv run python run.py gate` before submitting changes.
 
 ### Common Tasks
 
@@ -140,6 +140,7 @@ src/journal_utilities/
 | Start web interface | `uv run python run.py serve` | `interface/app.py` |
 | Run full pipeline | `uv run python run.py full` | `run.py` |
 | Run tests | `uv run python run.py test` | pytest |
+| Run the gate | `uv run python run.py gate` | `run.py` + `docs/RUN_GUIDE.md` |
 | Check sibling journal | `uv run python run.py journal-check` | `scripts/validate_journal.py` |
 | Enumerate channel | `python scripts/download_channel.py --enumerate-only` | `channel.py` |
 | Local Whisper | `python scripts/transcribe_missing.py` | `transcriber.py` |
@@ -155,15 +156,19 @@ All pipeline options live in `config.ini` (plaintext INI format):
 - `[transcribe]` — engine, model, max files
 - `[export]` — enabled formats, output directory
 - `[interface]` — host, port
-- `[database]` — SurrealDB connection
+- `[database]` — informational mirror of the `DB_*` env vars; no code reads this
+  section (see `docs/configuration.md`)
 
 ## Testing
 
 - Tests prefer real methods and real fixtures; mocks are reserved for external
   I/O that can't run in CI (live SurrealDB, Cohere API, Ollama, GPU/WhisperX,
   network downloads). See `tests/AGENTS.md`.
-- Run: `uv run pytest tests/ -v`
-- Coverage: `uv run pytest tests/ -v --cov=src --cov-report=term-missing`
+- Run: `uv run python run.py gate` (lint, format, types, tests, docs, gnn) or one
+  arm, e.g. `uv run python run.py gate test`. CI calls the same commands; see
+  `docs/RUN_GUIDE.md`.
+- Coverage: `uv run python run.py gate test-full` (coverage is opt-in, not in
+  pytest's default `addopts`).
 
 ## Environment Variables
 

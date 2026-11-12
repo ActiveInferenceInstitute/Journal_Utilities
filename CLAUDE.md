@@ -47,9 +47,10 @@ uv sync --all-extras
 ### Running Tests
 
 ```bash
-uv run pytest tests/ -v
-uv run pytest tests/journal_utilities/ -v       # YouTube download + transcription
-uv run pytest tests/journal_utilities/rag/ -v   # Entity extraction (RAG)
+uv run python run.py gate                  # lint, format, types, tests, docs, gnn
+uv run python run.py gate test-full        # everything on this host, with coverage
+uv run pytest tests/journal_utilities/ -q  # YouTube download + transcription
+uv run pytest tests/journal_utilities/rag/ -q  # Entity extraction (RAG)
 ```
 
 ### Pipeline Runner (run.py)

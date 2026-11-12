@@ -7,6 +7,42 @@ links, added missing folder guides, refreshed the sidecar; see the pass-3 entry 
 
 ---
 
+## Pass 4 — one gate entry point, measured arms (2026-11-12)
+
+- [x] **`run.py gate` is the single gate/CI entry point** — arms `lint`, `format`,
+      `types`, `test`, `test-full`, `docs`, `gnn`; the argv live once in
+      `gate_commands()` and both `test.yml` jobs call `run.py gate …` instead of
+      restating commands. See `docs/RUN_GUIDE.md`.
+- [x] **Duplicate setup removed** — the `gate` job syncs one locked environment
+      (`--extra rag --extra interface --extra export --dev`, the extras the suite
+      imports); the `gnn` job installs only the pinned parser via a throwaway `uv`
+      environment, so it no longer repeats a project install.
+- [x] **GNN heredoc became `scripts/gnn_conformance.py`** — one implementation of the
+      pin check, runnable locally for the first time; it parses sketches by path
+      (`parse_gnn_formal`) and validates text (`validate_gnn_syntax`).
+- [x] **Coverage left pytest's `addopts`** — the default test run no longer pays for
+      coverage it discards; `test-full` measures it.
+- [x] **Documentation checks became an arm** — `scripts/check_docs_links.py` fails on
+      broken relative links, a `docs/*.md` missing from `docs/documentation-index.md`,
+      or a top-level guide missing from `docs/README.md`.
+- [x] **Measured numbers moved to a generated file** — `docs/_generated/gate-arms.md`
+      is written by `run.py gate report`; `tests/README.md` and the guides no longer
+      carry hand-maintained counts.
+- [x] **Docs refreshed** — `docs/documentation-index.md` added (template convention),
+      `docs/data.md` records the SurrealDB 3.x client facts (factory + awaitables,
+      `rag` extra), `AGENTS.md` stops claiming `[database]` is read by code.
+
+Open after this pass:
+
+- [ ] **Hosted jobs cannot run** — GitHub Actions is billing-locked org-wide; the
+      local `run.py gate` is the evidence. The workflow YAML is lint-clean
+      (`actionlint .github/workflows/*.yml`), but no runner executed it.
+- [ ] **`test-full` reaches the network** — it runs the live `yt-dlp` download tests,
+      so its wall time (see `docs/_generated/gate-arms.md`) varies with the network and
+      it stays out of `gate all`.
+
+---
+
 ## Pass 3 — documentation completion (2026-11-11)
 
 Verification-only + completeness pass. Nothing here weakens a gate or changes runtime code.

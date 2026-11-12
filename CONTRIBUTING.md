@@ -31,16 +31,22 @@ it in `docs/configuration.md` and `config.ini`. Stale docs are bugs here.
 ## Gate workflow (run before pushing)
 
 ```bash
-uv run pytest tests/ -q                    # full suite (currently ~475 passed)
-uv run ruff check src/ tests/ scripts/     # lint — matches CI
-uv run mypy src                            # type check — matches CI
-uv run python run.py journal-check         # read-only journal integrity gate
+uv sync --frozen --extra rag --extra interface --extra export --dev
+uv run python run.py gate              # lint, format, types, tests, docs, gnn
 ```
 
-The CI workflow (`.github/workflows/test.yml`) runs pytest, ruff, and mypy,
-plus the pinned GNN conformance baseline (see `.github/GNN.md`) — a PR must be
-green on all of them. If you change the journal-maintenance scripts, also run
-the `validate_journal.py` gate against the sibling journal.
+Every arm is separately runnable (`uv run python run.py gate lint`, `… gate test`,
+`… gate gnn`, …) and CI calls that same table — see
+[`docs/RUN_GUIDE.md`](docs/RUN_GUIDE.md). `gate test-full` is the one arm that also
+reaches the network in tests and measures coverage.
+
+The CI workflow (`.github/workflows/test.yml`) runs the `gate` job and the pinned
+`gnn conformance (pinned)` job (see [`.github/GNN.md`](.github/GNN.md)); a PR must be
+green on all of them. GitHub Actions is billing-locked organization-wide, so a local
+`run.py gate` on a provisioned checkout is the gate that counts. If you change the
+journal-maintenance scripts, also run the `validate_journal.py` gate against the
+sibling journal:
+`uv run python run.py journal-check`.
 
 ## Style
 

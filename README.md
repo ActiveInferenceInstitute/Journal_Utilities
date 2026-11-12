@@ -260,6 +260,7 @@ and [`docs/REFACTOR_READINESS.md`](docs/REFACTOR_READINESS.md) for the refactor 
 | [**Site**](docs/site.md) | Static GitHub Pages bundle, URL contract, sitemap |
 | [**M3 Ingest**](docs/m3-ingest.md) | Weekly channel enumeration, scaffold, reconciliation |
 | [**Privacy**](docs/privacy.md) | Processing boundaries, API usage, retention |
+| [**Gate & CI**](docs/RUN_GUIDE.md) | `run.py gate` arms, environment, measured wall time |
 | [**Agent Guide**](AGENTS.md) | Architecture, code patterns, agent development rules |
 
 ---
@@ -267,13 +268,15 @@ and [`docs/REFACTOR_READINESS.md`](docs/REFACTOR_READINESS.md) for the refactor 
 ## 🧪 Testing
 
 ```bash
-uv run pytest tests/ -v --cov=src         # Full suite with coverage
-uv run python run.py journal-check         # Journal corpus integrity gate
+uv run python run.py gate            # lint, format, types, tests, docs, gnn
+uv run python run.py gate test-full  # everything on this host, with coverage
+uv run python run.py journal-check   # Journal corpus integrity gate
 ```
 
-Test counts and coverage are intentionally not embedded in this README because
-they change as the suite and corpus evolve. The commands above and CI output are
-the live status.
+The gate is one entry point with separately runnable arms; CI calls the same
+commands. Test counts and per-arm wall time are measured, not typed: see
+[`docs/RUN_GUIDE.md`](docs/RUN_GUIDE.md) and the generated
+[`docs/_generated/gate-arms.md`](docs/_generated/gate-arms.md).
 
 ## Journal v2 maintenance
 
