@@ -38,14 +38,15 @@ document here; the `docs` gate arm fails when a `docs/*.md` file is missing from
 
 | Doc | Covers |
 | --- | --- |
-| [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md) | The ActiveInferenceJournal v2 schema, source-namespaced layout, and maintenance gate. |
+| [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md) | Canonical schema pointers and pipeline maintenance instructions. |
 | [`REFACTOR_READINESS.md`](REFACTOR_READINESS.md) | Coverage, the local-LLM stack, and the refactor/verification process. |
 
 ## Collaboration
 
-Journal-Utilities is the **code**; ActiveInferenceJournal is the **content**. The schema
-of record is mirrored in both: `docs/JOURNAL_SCHEMA.md` here and `docs/SCHEMA.md` in the
-journal. Keep them in sync when the per-item structure changes.
+Journal-Utilities is the **code**; ActiveInferenceJournal is the **content** and owns
+the schema. [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md) links to that authority and keeps
+only pipeline instructions. The [Publishing integration](workflows/publishing.md)
+records the unchanged canonical copies and their digest checks.
 
 CLI tools (channel download, transcription, journal maintenance) are documented in
 [`scripts/README.md`](../scripts/README.md); contribution and security guidance in
@@ -54,4 +55,4 @@ CLI tools (channel download, transcription, journal maintenance) are documented 
 ## Folder guide
 
 [`AGENTS.md`](AGENTS.md) records the rules for editing this tree (hand-written, no
-hardcoded corpus counts, keep `JOURNAL_SCHEMA.md` mirrored with the journal repo).
+hardcoded corpus counts, canonical schema pointers rather than prose mirrors).

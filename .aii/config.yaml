@@ -1,7 +1,7 @@
 # AII sidecar — InstituteOS metadata. Schema: aii_platform.aii_sidecar
 meta:
   sidecar_version: 1.2.1
-  updated: '2026-11-11'
+  updated: '2026-11-12'
 repo:
   name: Journal-Utilities
   slug: journal-utilities
@@ -77,19 +77,32 @@ capabilities:
 - ci
 - citation
 tasks:
-  test:
-    cmd: uv run pytest tests/
-    description: Run the test suite.
   lint:
-    cmd: uv run ruff check src/ tests/ scripts/
-    description: Run the linter (matches CI).
-  make:
-    cmd: make
-    description: Default make target (help).
+    cmd: uv run python run.py gate lint
+    description: Run the gate linter.
+  format:
+    cmd: uv run python run.py gate format
+    description: Check formatting through the gate.
+  types:
+    cmd: uv run python run.py gate types
+    description: Run the gate type checker.
+  test:
+    cmd: uv run python run.py gate test
+    description: Run the CI test selection.
+  test-full:
+    cmd: uv run python run.py gate test-full
+    description: Run tests with coverage, including reachable live downloads.
+  docs:
+    cmd: uv run python run.py gate docs
+    description: Check docs/documentation-index.md, links and the Publishing pins. No manuscript command.
+  gnn:
+    cmd: uv run python run.py gate gnn
+    description: Check GNN conformance using .github/gnn-pin.json.
 docs:
 - README.md
 - AGENTS.md
-- docs/INTEGRATION.md
+- docs/documentation-index.md
 - docs/README.md
 - docs/AGENTS.md
+- docs/workflows/publishing.md
 schema: aii-sidecar/v1

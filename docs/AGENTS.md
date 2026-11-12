@@ -7,8 +7,9 @@ Module and workflow guides for Journal-Utilities. Start at [`README.md`](README.
   and `../scripts/`.
 - Do **not** hardcode counts (video/item totals) — they drift; cite `data/output/channel_videos.json`
   or the journal `INDEX.json` as the live source.
-- The journal **schema of record** is [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md); mirror any
-  change into the journal repo's `docs/SCHEMA.md`.
+- ActiveInferenceJournal owns the schema. [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md)
+  keeps canonical pointers and pipeline instructions, not a mirrored definition.
+  Follow the [Publishing integration](workflows/publishing.md) when updating pinned artifacts.
 - Keep [`documentation-index.md`](documentation-index.md) complete: every tracked
   `docs/*.md` is listed there, and every top-level guide is linked from `README.md`.
   `uv run python run.py gate docs` enforces both.
