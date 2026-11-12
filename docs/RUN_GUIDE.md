@@ -33,7 +33,7 @@ exact sync command instead of a traceback.
 | `lint` | `ruff check src/ tests/ scripts/` | Ruff rules from `pyproject.toml` |
 | `format` | `ruff format --check src/ tests/ scripts/` | Formatting (`ruff format` replaced black) |
 | `types` | `mypy src` | Strict typing over the package (per-module overrides documented in `pyproject.toml`) |
-| `test` | `pytest tests/ -q` with `CI=true` | The CI selection: 682 tests, live-network download tests self-skip (see `tests/journal_utilities/test_downloader.py`) |
+| `test` | `pytest tests/ -q` with `CI=true` | The CI selection: same suite, live-network download tests self-skip (see `tests/journal_utilities/test_downloader.py`); counts are in the generated page |
 | `test-full` | `pytest tests/ -q --cov=src --cov-report=term-missing` | Everything this host can reach, including live downloads, plus coverage |
 | `docs` | `python scripts/check_docs_links.py` | Every relative link in tracked Markdown resolves; `docs/*.md` stays listed in `docs/documentation-index.md` and linked from `docs/README.md` |
 | `gnn` | `uv run --no-project --with … python scripts/gnn_conformance.py` | The pinned parser parses and type-checks the GNN sketches |
