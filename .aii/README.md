@@ -41,9 +41,13 @@ Institute repositories without touching this project's own content. The schema i
 
 | Task | Command | Working directory | Description |
 | --- | --- | --- | --- |
-| `test` | `uv run pytest tests/` | `.` | Run the test suite. |
-| `lint` | `uv run ruff check src/ tests/ scripts/` | `.` | Run the linter (matches CI). |
-| `make` | `make` | `.` | Default make target (help). |
+| `lint` | `uv run python run.py gate lint` | `.` | Run the gate linter. |
+| `format` | `uv run python run.py gate format` | `.` | Check formatting through the gate. |
+| `types` | `uv run python run.py gate types` | `.` | Run the gate type checker. |
+| `test` | `uv run python run.py gate test` | `.` | Run the CI test selection. |
+| `test-full` | `uv run python run.py gate test-full` | `.` | Run tests with coverage, including reachable live downloads. |
+| `docs` | `uv run python run.py gate docs` | `.` | Check docs/documentation-index.md, links and the Publishing pins. No manuscript command. |
+| `gnn` | `uv run python run.py gate gnn` | `.` | Check GNN conformance using .github/gnn-pin.json. |
 
 ## Links
 

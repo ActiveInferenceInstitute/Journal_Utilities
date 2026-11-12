@@ -94,15 +94,17 @@ tasks:
     description: Run tests with coverage, including reachable live downloads.
   docs:
     cmd: uv run python run.py gate docs
-    description: Check docs/documentation-index.md, links and the Publishing pins. No manuscript command.
+    description: Check docs/documentation-index.md, links and the Publishing pins.
+      No manuscript command.
   gnn:
     cmd: uv run python run.py gate gnn
     description: Check GNN conformance using .github/gnn-pin.json.
 docs:
 - README.md
 - AGENTS.md
-- docs/documentation-index.md
+- ../docs/documentation-index.md
 - docs/README.md
 - docs/AGENTS.md
-- docs/workflows/publishing.md
+- ../docs/workflows/publishing.md
+- docs/INTEGRATION.md
 schema: aii-sidecar/v1
