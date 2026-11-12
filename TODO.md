@@ -2,8 +2,75 @@
 
 **Status:** Maintained
 **Owner:** Active Inference Institute / Journal-Utilities maintainers
-**Last reviewed:** 2026-11-11 (documentation completion pass — verified commands and
-links, added missing folder guides, refreshed the sidecar; see the pass-3 entry below)
+**Last reviewed:** 2026-11-12 (verification pass — Publishing contract migration, gate
+re-run on this checkout, pin and formatter state confirmed; see the pass-5 entry below)
+
+---
+
+## Pass 5 — Publishing contract, verified gate state (2026-11-12)
+
+Verification pass: every claim below was re-run on this checkout, not carried over.
+
+- [x] **Publishing contract migration landed** — `3ed5e38` (PR #51) adds
+      `docs/workflows/publishing.md` + `docs/workflows/record-identity.schema.json`,
+      `scripts/gate/identity.py` (+ `identity_selftest.py`), and makes the `docs` arm
+      run `scripts/gate/check_docs.py`, which chains `scripts/check_docs_links.py`,
+      the identity check and the per-artifact `--verify-copy` digests. `.aii/config.yaml`
+      tasks and `docs/JOURNAL_SCHEMA.md` (now a pointer, not a mirror) follow the same
+      contract.
+- [x] **E2 formatter switch is complete** — the formatting-only commit is `9cb2642`
+      ("style: apply ruff format across src, tests, scripts (52 files) [E2]"); `black`
+      no longer appears in `pyproject.toml`, `Makefile`, `CONTRIBUTING.md` or
+      `CLAUDE.md`, and `ruff format --check src/ tests/ scripts/` reports
+      "143 files already formatted".
+- [x] **Local gate evidence** — `run.py gate test` → 682 passed, 15 skipped, 2 warnings;
+      `run.py gate docs` → "OK: 791 tracked Markdown file(s), links and docs index
+      consistent"; `aii_sidecar validate .` → OK.
+- [x] **Test counts left the docs** — `tests/README.md` points at
+      `docs/_generated/gate-arms.md` instead of carrying a number (pass 4's policy is
+      in force).
+
+Open after this pass:
+
+- [ ] **Hosted jobs still cannot run** — GitHub Actions is billing-locked org-wide. Run
+      `43260889356` (push of `3ed5e38`) shows both jobs failing in 2 s with "The job was
+      not started because your account is locked due to a billing issue." Local
+      `run.py gate` is the only evidence; unblocked by the org owner clearing the
+      billing lock.
+- [ ] **GNN pin is behind the estate** — `.github/gnn-pin.json` pins
+      `Generalized_Notation_Notation` at `v5.0.3`
+      (`8f293d9ba810e6eda5c09842d9c7ed9ffa5f92c1`); seven sibling public repos (AEOS,
+      Active_Inference_Ontology, Biofirm, CEREBRUM, COGANT, active_fractal_rabbit,
+      pymcp) pin `v5.1.0` (`75c834bd8519dc7b5adc4d24f16bf393cfd1ecdf`). Bumping means
+      editing the pin and the four hand-written places that restate it (`.github/GNN.md`,
+      `.github/README.md`, `docs/RUN_GUIDE.md`, the `test.yml` comment), then re-running
+      `run.py gate gnn`. Owner: repo maintainers; nothing but the conformance arm reads
+      the pin.
+- [ ] **`.git-blame-ignore-revs` still holds the placeholder** — the file says the
+      formatting commit "has NOT landed yet"; it landed as `9cb2642`. Append that
+      40-char SHA (confirm it is style-only first) and drop the placeholder text.
+- [ ] **`tests/AGENTS.md` carries a stale count** — "currently ~475 passing, 3
+      API-gated skips, snapshot of 2026-08-02" contradicts `tests/README.md`'s
+      no-counts policy and the measured 682 passed / 15 skipped. Replace it with a
+      pointer to `docs/_generated/gate-arms.md`.
+- [ ] **`make format` does not cover `scripts/`** — the target runs
+      `ruff format src/ tests/` while the `format` arm checks `src/ tests/ scripts/`, so
+      a contributor can run `make format` and still fail the gate. Same class as MI12
+      (`make lint`).
+- [ ] **`docs/_generated/gate-arms.md` predates #51** — it records commit `1d8945a` and
+      "790 tracked Markdown file(s)"; the tree now has 791. Regenerate with
+      `uv run python run.py gate report` (it runs `test-full`, so it needs network).
+- [ ] **`test-full` reaches the network** — it runs the live `yt-dlp` download tests
+      (`gate_env` removes `CI` for that arm), so its wall time varies and it stays out
+      of `gate all`.
+- [ ] **Heavy external flows not executed** — WhisperX/GPU, live SurrealDB, live
+      Cohere, YouTube writes. Verified by code reading only; run on the target hardware
+      with real credentials.
+- [ ] **`Translations/` → `translations/` migration (J2/M2)** — owned by the sibling
+      `ActiveInferenceJournal` repo; this repo's reader-side bridge (I4) stays until
+      that `git mv` + BCP-47 normalization lands.
+- [ ] **84-video description backlog** — the remainder of the original M5 audit,
+      owner-scheduled pending the 10× YouTube Data API quota decision.
 
 ---
 
@@ -65,17 +132,16 @@ Verification-only + completeness pass. Nothing here weakens a gate or changes ru
 
 Open after this pass:
 
-- [ ] **Test suite not run in this pass** — the pytest suite needs a provisioned `uv`
-      virtualenv (WhisperX/interface extras) that is not available in the docs pass
-      environment. Run `uv run pytest tests/ -q` on a configured checkout.
-- [ ] **Historical entries below reference retired scripts** — the "Follow-up pass
+- [x] **Test suite not run in this pass** — closed in pass 5: `run.py gate test` on a
+      provisioned checkout → 682 passed, 15 skipped, 2 warnings.
+- **Historical entries below reference retired scripts** — the "Follow-up pass
       (2026-08-02)" section names `scripts/translate_subtitles.py`,
       `scripts/translate_openrouter.py` and `scripts/translate_tb_watchdog.sh`; these were
       later consolidated into `scripts/translate_subtitles_openrouter.py`. Kept as history,
-      not current guidance.
-- [ ] **Date-snapshot test counts** in `tests/README.md` / `tests/AGENTS.md` remain live
-      snapshots by policy; refresh from `uv run pytest tests/ -q` whenever a pass touches
-      tests.
+      not current guidance. (Note, not a task.)
+- **Date-snapshot test counts** — superseded by pass 4: `tests/README.md` no longer
+      carries a count (it points at `docs/_generated/gate-arms.md`). `tests/AGENTS.md`
+      still does; that residue is tracked in pass 5.
 
 ---
 
@@ -314,10 +380,6 @@ root `AGENTS.md` mock-policy reconciled; `docs/REFACTOR_READINESS.md` marked a h
   these only on the target hardware with real credentials. (During the follow-up
   pass a live OpenRouter subtitle-translation run was observed against the
   sibling journal — it was left untouched, and its CLI contract is unchanged.)
-- **`insights_findings.md` (working notes)** — Insights-series caption-fix and
-  translation-status notes; kept untracked per its own "Do not commit/push until
-  the user asks." note. Recurring translation-work logs like this should live
-  outside the repo or be deleted once the run is done.
 - **Coverage %** — intentionally not hardcoded anywhere (docs policy); see live
   `uv run pytest tests/ --cov-report=term-missing`. Confirmed no-action.
 
@@ -360,35 +422,38 @@ root `AGENTS.md` mock-policy reconciled; `docs/REFACTOR_READINESS.md` marked a h
       (`-m` module paths and `scripts/*.py` args in `Makefile`, plus every
       `scripts/…py` mention in `docs/*.md`). All resolve; no stale commands found
       this pass. Acceptance: zero missing refs in the same mechanical scan. ✓
-- [ ] **Documentation test-count snapshot drift** — `tests/README.md` /
-      `tests/AGENTS.md` counts are dated snapshots by policy; refresh from a live
-      `uv run pytest tests/ -q` whenever a pass touches tests. Deferred: this
-      round changed docs only; no test surface moved.
+- [x] **Documentation test-count snapshot drift** — superseded by pass 4: counts moved
+      to the generated `docs/_generated/gate-arms.md`, so there is no hand-maintained
+      snapshot to refresh. (`tests/AGENTS.md` still holds one; see pass 5.)
 
 ## E2 M0 CI-gates pass — 2026-09-23 (feat/m0-ci-gates)
 
-- [ ] **E2 remainder — formatting-only commit + black removal (sibling-owned files)** — the
-  CI surface `.github/workflows/test.yml` now gates `ruff format --check src/ tests/ scripts/`
-  (required check: `test`) and the new `.pre-commit-config.yaml` runs ruff (check + fix),
-  ruff format, and mypy on src; `.git-blame-ignore-revs` holds a placeholder for the
-  formatting commit. This reverses the M2 decision that dropped the ruff-format gate
-  (the black convention is retired in favor of ruff format). Blocking on ju-repo-diet:
-  land the formatting-only commit (`uv run ruff format src/ tests/ scripts/`, ~63 files,
-  style-only, SHA goes into `.git-blame-ignore-revs`) and remove `[tool.black]` + the
-  `black` dev dependency from `pyproject.toml` and the `make format` target from `Makefile`;
-  update the black rows in `CONTRIBUTING.md` / `CLAUDE.md` in the same PR.
+- [x] **E2 remainder — formatting-only commit + black removal** — the CI surface
+  `.github/workflows/test.yml` gates `ruff format --check src/ tests/ scripts/` (required
+  check: `test`) and `.pre-commit-config.yaml` runs ruff (check + fix), ruff format, and
+  mypy on src; this reverses the M2 decision that dropped the ruff-format gate.
+  **Landed:** the formatting commit is `9cb2642` ("style: apply ruff format across src,
+  tests, scripts (52 files) [E2]", merged in `1750603`); `black` is gone from
+  `pyproject.toml`, `CONTRIBUTING.md`, `CLAUDE.md` and `Makefile` (the `make format`
+  target was rewritten to run `ruff format` rather than removed), and
+  `ruff format --check src/ tests/ scripts/` → "143 files already formatted".
+  **Residue:** `.git-blame-ignore-revs` still carries the placeholder commentary — see
+  pass 5. (`make format` not covering `scripts/` is also tracked in pass 5.)
 
 ## Notes for the next reviewer
 
-- Test/corpus counts are live snapshots — run `uv run pytest tests/ -q`; do not hardcode totals
-  (`docs/AGENTS.md`).
-- Gate workflow: `uv run pytest tests/ -q`, `uv run ruff check src/ tests/ scripts/`,
-  `uv run mypy src`. Both ruff and mypy are enforced in `.github/workflows/test.yml`.
-- The v2 journal maintenance pipeline lives in `docs/JOURNAL_SCHEMA.md` and the read-only/idempotent
-  gate scripts `scripts/{enrich_metadata,repair_split_transcripts,generate_journal_indexes,validate_journal}.py`.
-- This pass (2026-08-02) was docs-only + config fixes; the follow-up pass landed the
+- Test/corpus counts are measured, never hand-written — `uv run python run.py gate report`
+  writes `docs/_generated/gate-arms.md`; run `uv run pytest tests/ -q` for a live number.
+- Gate entry point: `uv run python run.py gate lint format types test docs` (plus `gnn`);
+  the argv exists once in `gate_commands()` in `run.py` and both CI jobs call it. See
+  `docs/RUN_GUIDE.md`.
+- The journal schema is defined by ActiveInferenceJournal, not here — `docs/JOURNAL_SCHEMA.md`
+  links the canonical prose and describes only how this pipeline writes and checks it. The
+  read-only maintenance gates are
+  `scripts/{enrich_metadata,repair_split_transcripts,generate_journal_indexes,validate_journal}.py`.
+- This section's 2026-08-02 pass was docs-only + config fixes; the follow-up pass landed the
   subtitle-translation feature (local Ollama + hosted OpenRouter engines, see
-  `docs/translation.md`). `insights_findings.md` remains untracked working notes.
+  `docs/translation.md`).
 
 ---
 
