@@ -35,12 +35,13 @@ from it.
 
 ## Journal refactor
 
-- [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md) — ActiveInferenceJournal v2 schema and maintenance gate
+- [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md) — canonical schema pointers and pipeline maintenance gate
 - [`REFACTOR_READINESS.md`](REFACTOR_READINESS.md) — coverage, local-LLM stack, verification process
 
 ## Gates, CI, and generated evidence
 
 - [`RUN_GUIDE.md`](RUN_GUIDE.md) — arms, environment, and how CI calls them
+- [`workflows/publishing.md`](workflows/publishing.md) — member migration, canonical artifact digests and offline checks
 - [`gate-baseline.json`](gate-baseline.json) — recorded pre-gate readings that `run.py gate report` consumes
 - [`_generated/gate-arms.md`](_generated/gate-arms.md) — measured per-arm wall time (generated)
 - [`../.github/README.md`](../.github/README.md) — workflows, Dependabot, local checks
