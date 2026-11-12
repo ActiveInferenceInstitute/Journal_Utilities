@@ -44,8 +44,10 @@ pipeline steps.
 - `gnn_conformance.py` — the `gnn` arm. Reads `.github/gnn-pin.json` (schema
   `gnn-importer-pin/v1`), verifies the installed parser version against the pin,
   then parses and type-checks every `*.gnn.md` sketch — or the pinned upstream
-  exemplar when the tree has none. `--requirements` prints the install specs so the
-  caller can provide the pinned parser without a project sync.
+  exemplar when the tree has none. The type checker's verdict must be literally
+  `True`; its `2` (invalid files, or none found) and `False` (hard failure) both
+  fail the arm, which prints the returned value. `--requirements` prints the
+  install specs so the caller can provide the pinned parser without a project sync.
 
 ## `download_channel.py`
 

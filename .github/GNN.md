@@ -16,5 +16,9 @@ in the repository (`parse_gnn_formal` on the path, `validate_gnn_syntax` on the 
 and type-checks copies of them. When the repository has no sketch yet,
 it parses the pinned upstream `input/gnn_files/basics/static_perception.md`
 exemplar; this is a pipeline and pin conformance baseline, not a claim that the
-repository already contains a model. The arm prints one JSON summary line
-(`gnn-version`, `pin-revision`, `models`, `source`, `result`).
+repository already contains a model. The type checker's verdict is three-valued
+(`True` when every file validates, `2` when a file had type or consistency
+problems or none was found, `False` on a hard failure); the arm accepts only
+literal `True` and prints the returned value when it refuses, so an invalid
+sketch fails the job instead of reporting `"verified"`. The arm prints one JSON
+summary line (`gnn-version`, `pin-revision`, `models`, `source`, `result`).

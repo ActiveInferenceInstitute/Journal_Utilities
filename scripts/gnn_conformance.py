@@ -96,13 +96,24 @@ def check(pin: dict[str, str], root: Path) -> dict[str, object]:
             raise ConformanceError(f"{label} syntax errors: {errors!r}")
 
     def typecheck(files: list[Path], output_dir: Path) -> None:
-        """Copy *files* into a model directory and run the pinned type checker."""
+        """Copy *files* into a model directory and run the pinned type checker.
+
+        The pinned checker's verdict is three-valued: ``True`` when every file
+        validates, ``2`` when the run completed but a file had type or
+        consistency problems (or no GNN file was found), and ``False`` on a
+        hard failure. Only literal ``True`` is a pass — ``2`` is truthy, so a
+        truthiness test would report an invalid model as verified.
+        """
         model_dir = output_dir / "models"
         model_dir.mkdir()
         for index, path in enumerate(files):
             shutil.copy2(path, model_dir / f"{index:03d}_{path.name}")
-        if not GNNTypeChecker().validate_gnn_files(model_dir, output_dir):
-            raise ConformanceError("GNN type checker rejected the checked sketches")
+        verdict = GNNTypeChecker().validate_gnn_files(model_dir, output_dir)
+        if verdict is not True:
+            raise ConformanceError(
+                "GNN type checker rejected the checked sketches "
+                f"(validate_gnn_files returned {verdict!r}; only True passes)"
+            )
 
     expected_version = pin["tag"].removeprefix("v")
     if __version__ != expected_version:
