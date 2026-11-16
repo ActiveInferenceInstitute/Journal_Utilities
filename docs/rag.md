@@ -85,8 +85,9 @@ Relationship endpoints are checked against the trusted source-qualified entity
 identity. Missing required endpoints or failed edge writes leave the transcript
 pending. Retry and replay reuse persisted records rather than duplicating edges.
 Generic names or metadata claims never establish provenance for unknown-source
-legacy records. File and database loaders use a valid filename date, otherwise
-`datetime.min`; retries preserve stored historical dates.
+legacy records. File and database loaders parse dates from the full filename,
+including dotted dates without a separate extension; invalid or absent dates use
+`datetime.min`. Titles still use the filename stem; retries preserve stored historical dates.
 
 ## Legacy schema migration
 

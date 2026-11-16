@@ -243,6 +243,8 @@ async def test_process_transcript_converts_entities_correctly(
 
 @pytest.mark.parametrize("filename, expected", [
     ("talk_2025-10-30.txt", datetime(2025, 10, 30)),
+    ("talk_2025.10.30", datetime(2025, 10, 30)),
+    ("talk_2025.10.30.txt", datetime(2025, 10, 30)),
     ("undated.txt", datetime.min),
     ("talk_2025-02-30.txt", datetime.min),
 ])

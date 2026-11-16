@@ -32,7 +32,7 @@ def _date_from_filename(filename: str) -> datetime:
 
 
 def _load_transcript(path: Path, *, source: str) -> Transcript:
-    return Transcript(title=path.stem, date=_date_from_filename(path.stem),
+    return Transcript(title=path.stem, date=_date_from_filename(path.name),
                       content=path.read_text(encoding="utf-8"), source=source)
 
 
