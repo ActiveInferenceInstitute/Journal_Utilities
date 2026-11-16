@@ -6,8 +6,8 @@
 throwaway `uv` environment containing only the pinned parser.
 
 The check reads `.github/gnn-pin.json` — schema `gnn-importer-pin/v1` — which pins
-`ActiveInferenceInstitute/Generalized_Notation_Notation` at `v5.0.3`
-(`8f293d9ba810e6eda5c09842d9c7ed9ffa5f92c1`). The pin is the only source of the
+`ActiveInferenceInstitute/Generalized_Notation_Notation` at `v5.1.0`
+(`75c834bd8519dc7b5adc4d24f16bf393cfd1ecdf`). The pin is the only source of the
 repository, tag and revision; the script's `--requirements` output is derived from it,
 so the workflow never restates the revision.
 
