@@ -1,13 +1,10 @@
-"""
-Unit tests for SurrealDBClient with mocks.
-"""
+"""Storage admission/error contracts at the SDK boundary; not real-schema proof."""
 
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
-# Requires the rag extra; skip cleanly when it is not installed.
 pytest.importorskip("surrealdb")
 pytest.importorskip("structlog")
 
@@ -15,304 +12,150 @@ from journal_utilities.rag.graph.surreal_client import SurrealDBClient
 from journal_utilities.rag.models import Entity, Relationship, Transcript
 
 
-class TestSurrealDBClientInit:
-    """Tests for SurrealDBClient initialization."""
-
-    def test_default_initialization(self):
-        """Test client initializes with default settings."""
-        with patch("journal_utilities.rag.graph.surreal_client.settings") as mock_settings:
-            mock_settings.surrealdb_url = "ws://localhost:8080"
-            mock_settings.surrealdb_namespace = "test"
-            mock_settings.surrealdb_database = "test"
-            mock_settings.surrealdb_username = "root"
-            mock_settings.surrealdb_password = "root"
-
-            client = SurrealDBClient()
-
-            assert client.url == "ws://localhost:8080"
-            assert client.namespace == "test"
-            assert client.database == "test"
-
-    def test_custom_initialization(self):
-        """Test client with custom parameters."""
-        client = SurrealDBClient(
-            url="ws://custom:9000",
-            namespace="custom_ns",
-            database="custom_db",
-            username="user",
-            password="pass",
-        )
-
-        assert client.url == "ws://custom:9000"
-        assert client.namespace == "custom_ns"
-        assert client.database == "custom_db"
+@pytest.fixture
+def connected():
+    client = SurrealDBClient()
+    client.db = AsyncMock()
+    client.db.query.return_value = [[]]
+    return client, client.db
 
 
-class TestSurrealDBClientConnection:
-    """Tests for connection management."""
-
-    @pytest.fixture
-    def mock_surreal(self):
-        """Create a mock Surreal instance."""
-        mock = AsyncMock()
-        mock.connect = AsyncMock()
-        mock.signin = AsyncMock()
-        mock.use = AsyncMock()
-        mock.close = AsyncMock()
-        mock.query = AsyncMock(return_value=[])
-        mock.create = AsyncMock(return_value=[{"id": "test:1"}])
-        mock.update = AsyncMock()
-        return mock
-
-    @pytest.mark.asyncio
-    async def test_connect_success(self, mock_surreal):
-        """Test successful connection."""
-        with patch(
-            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
-        ):
-            client = SurrealDBClient(
-                url="ws://test:8080",
-                namespace="ns",
-                database="db",
-                username="user",
-                password="pass",
-            )
-
-            await client.connect()
-
-            mock_surreal.connect.assert_called_once()
-            mock_surreal.signin.assert_called_once_with({"user": "user", "pass": "pass"})
-            mock_surreal.use.assert_called_once_with("ns", "db")
-
-    @pytest.mark.asyncio
-    async def test_disconnect(self, mock_surreal):
-        """Test disconnection."""
-        with patch(
-            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
-        ):
-            client = SurrealDBClient(
-                url="ws://test:8080",
-                namespace="ns",
-                database="db",
-                username="user",
-                password="pass",
-            )
-
-            await client.connect()
-            await client.disconnect()
-
-            mock_surreal.close.assert_called_once()
+async def test_ambiguous_entity_does_not_select_first_or_write(connected):
+    client, db = connected
+    db.query.return_value = [[{"id": "entity:a"}, {"id": "entity:b"}]]
+    with pytest.raises(RuntimeError, match="Ambiguous"):
+        await client.create_entity(Entity(source="a.txt", type="concept", name="Shared"))
+    db.create.assert_not_awaited()
 
 
-class TestSurrealDBClientEntities:
-    """Tests for entity operations."""
-
-    @pytest.fixture
-    def mock_surreal(self):
-        mock = AsyncMock()
-        mock.connect = AsyncMock()
-        mock.signin = AsyncMock()
-        mock.use = AsyncMock()
-        mock.query = AsyncMock(return_value=[[]])
-        mock.create = AsyncMock(return_value=[{"id": "entity:1"}])
-        mock.update = AsyncMock()
-        return mock
-
-    @pytest.fixture
-    def sample_entity(self):
-        return Entity(
-            name="Test Entity",
-            type="concept",
-            description="A test entity",
-            confidence=0.9,
-            mentions=5,
-            context=["test context"],
-        )
-
-    @pytest.mark.asyncio
-    async def test_create_new_entity(self, mock_surreal, sample_entity):
-        """Test creating a new entity."""
-        mock_surreal.query = AsyncMock(return_value=[[]])  # No existing
-
-        with patch(
-            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
-        ):
-            client = SurrealDBClient(
-                url="ws://test:8080",
-                namespace="ns",
-                database="db",
-                username="user",
-                password="pass",
-            )
-            await client.connect()
-
-            result = await client.create_entity(sample_entity)
-
-            assert result == "entity:1"
-            mock_surreal.create.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_update_existing_entity(self, mock_surreal, sample_entity):
-        """Test updating an existing entity."""
-        mock_surreal.query = AsyncMock(
-            return_value=[
-                [
-                    {
-                        "id": "entity:existing",
-                        "confidence": 0.8,
-                        "context": ["old context"],
-                        "description": "Old description",
-                    }
-                ]
-            ]
-        )
-
-        with patch(
-            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
-        ):
-            client = SurrealDBClient(
-                url="ws://test:8080",
-                namespace="ns",
-                database="db",
-                username="user",
-                password="pass",
-            )
-            await client.connect()
-
-            result = await client.create_entity(sample_entity)
-
-            assert result == "entity:existing"
-            mock_surreal.update.assert_called_once()
+async def test_cross_source_or_wrong_type_endpoints_are_refused(connected):
+    client, db = connected
+    db.query.return_value = [
+        [{"id": "entity:wrong", "source": "other.txt", "type": "concept", "name": "Shared"}]
+    ]
+    edge = Relationship(
+        transcript_source="a.txt",
+        source="Shared",
+        target="Target",
+        source_type="concept",
+        target_type="concept",
+        relationship_type="related_to",
+    )
+    with pytest.raises(ValueError, match="trusted source/type/name"):
+        await client.create_relationship(edge, source_id="entity:wrong", target_id="entity:target")
+    db.relate.assert_not_awaited()
 
 
-class TestSurrealDBClientTranscripts:
-    """Tests for transcript operations."""
-
-    @pytest.fixture
-    def mock_surreal(self):
-        mock = AsyncMock()
-        mock.connect = AsyncMock()
-        mock.signin = AsyncMock()
-        mock.use = AsyncMock()
-        mock.query = AsyncMock(return_value=[[]])
-        mock.create = AsyncMock(return_value=[{"id": "transcript:1"}])
-        mock.update = AsyncMock()
-        return mock
-
-    @pytest.fixture
-    def sample_transcript(self):
-        return Transcript(
-            title="Test Transcript",
-            date=datetime.now(UTC),
-            content="Test content",
-            source="/path/to/file.txt",
-        )
-
-    @pytest.mark.asyncio
-    async def test_create_transcript(self, mock_surreal, sample_transcript):
-        """Test creating a transcript."""
-        with patch(
-            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
-        ):
-            client = SurrealDBClient(
-                url="ws://test:8080",
-                namespace="ns",
-                database="db",
-                username="user",
-                password="pass",
-            )
-            await client.connect()
-
-            result = await client.create_transcript(sample_transcript)
-
-            assert result == "transcript:1"
-            mock_surreal.create.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_get_unprocessed_transcripts(self, mock_surreal):
-        """Test getting unprocessed transcript paths."""
-        mock_surreal.query = AsyncMock(
-            return_value=[[{"source": "/path/1.txt"}, {"source": "/path/2.txt"}]]
-        )
-
-        with patch(
-            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
-        ):
-            client = SurrealDBClient(
-                url="ws://test:8080",
-                namespace="ns",
-                database="db",
-                username="user",
-                password="pass",
-            )
-            await client.connect()
-
-            paths = await client.get_unprocessed_transcript_paths()
-
-            assert len(paths) == 2
-            assert "/path/1.txt" in paths
-            assert "/path/2.txt" in paths
+async def test_transcript_update_does_not_replace_date_or_identity(connected):
+    client, db = connected
+    db.query.side_effect = [
+        [[{"id": "transcript:old", "source": "a.txt", "date": datetime(2000, 1, 1)}]],
+        [[{"id": "transcript:old"}]],
+    ]
+    transcript = Transcript(title="Updated", date=datetime.min, source="a.txt", content="New text")
+    assert await client.get_or_create_transcript(transcript) == "transcript:old"
+    changes = db.query.await_args.args[1]["changes"]
+    assert changes == {
+        "title": "Updated",
+        "content": "New text",
+        "metadata": {},
+        "processed": False,
+    }
+    db.create.assert_not_awaited()
 
 
-class TestSurrealDBClientRelationships:
-    """Tests for relationship operations."""
-
-    @pytest.fixture
-    def mock_surreal(self):
-        mock = AsyncMock()
-        mock.connect = AsyncMock()
-        mock.signin = AsyncMock()
-        mock.use = AsyncMock()
-        mock.query = AsyncMock(return_value=[[{"id": "entity:1"}]])
-        return mock
-
-    @pytest.fixture
-    def sample_relationship(self):
-        return Relationship(
-            source="Entity A", target="Entity B", relationship_type="relates_to", confidence=0.85
-        )
-
-    @pytest.mark.asyncio
-    async def test_create_relationship_entities_not_found(self, mock_surreal, sample_relationship):
-        """Test creating relationship when entities not found."""
-        mock_surreal.query = AsyncMock(return_value=[[]])  # No entities found
-
-        with patch(
-            "journal_utilities.rag.graph.surreal_client.AsyncSurreal", return_value=mock_surreal
-        ):
-            client = SurrealDBClient(
-                url="ws://test:8080",
-                namespace="ns",
-                database="db",
-                username="user",
-                password="pass",
-            )
-            await client.connect()
-
-            with pytest.raises(ValueError, match="Source or target entity not found"):
-                await client.create_relationship(sample_relationship)
+async def test_disappeared_status_target_is_not_reported_complete(connected):
+    client, _ = connected
+    with pytest.raises(RuntimeError, match="disappeared"):
+        await client.update_transcript_status("transcript:gone", processed=True)
 
 
-class TestSurrealDBClientErrors:
-    """Tests for error handling."""
+async def test_pending_without_source_is_not_silently_skipped(connected):
+    client, db = connected
+    db.query.return_value = [[{"source": None}]]
+    with pytest.raises(RuntimeError, match="no trusted source"):
+        await client.get_unprocessed_transcript_paths()
 
-    def test_query_without_connection(self):
-        """Test that queries fail without connection."""
-        client = SurrealDBClient(
-            url="ws://test:8080", namespace="ns", database="db", username="user", password="pass"
-        )
 
-        # db is None until connect() is called
-        assert client.db is None
+async def test_legacy_schema_requires_explicit_admission(monkeypatch):
+    db = AsyncMock()
+    db.query.side_effect = [
+        [{"tables": {"entity": "SCHEMAFULL"}}],
+        [{"indexes": {"entity_name_type": "name,type UNIQUE"}}],
+    ]
+    monkeypatch.setattr("journal_utilities.rag.graph.surreal_client.AsyncSurreal", lambda _: db)
+    client = SurrealDBClient()
+    with pytest.raises(RuntimeError, match="--migrate-source-identity"):
+        await client.connect()
+    db.close.assert_awaited_once()
+    assert client.db is None
 
-    @pytest.mark.asyncio
-    async def test_create_entity_not_connected(self):
-        """Test create_entity raises error when not connected."""
-        client = SurrealDBClient(
-            url="ws://test:8080", namespace="ns", database="db", username="user", password="pass"
-        )
 
-        entity = Entity(name="Test", type="concept", confidence=0.9, mentions=1, context=["test"])
+@pytest.mark.parametrize(
+    "entities,edges",
+    [
+        (
+            [
+                {
+                    "id": "entity:a",
+                    "name": "Shared",
+                    "type": "concept",
+                    "source": "a.txt",
+                    "metadata": {"source": "b.txt"},
+                }
+            ],
+            [],
+        ),
+        (
+            [
+                {"id": "entity:a", "name": "Shared", "type": "concept", "source": "a.txt"},
+                {"id": "entity:b", "name": "Shared", "type": "concept", "source": "a.txt"},
+            ],
+            [],
+        ),
+        (
+            [{"id": "entity:a", "name": "Shared", "type": "concept", "source": "a.txt"}],
+            [
+                {
+                    "id": "relates:x",
+                    "source": "b.txt",
+                    "in": "entity:a",
+                    "out": "entity:a",
+                    "relationship_type": "related_to",
+                }
+            ],
+        ),
+    ],
+)
+async def test_explicit_migration_refuses_ambiguous_attribution(monkeypatch, entities, edges):
+    db = AsyncMock()
+    db.query.side_effect = [
+        [{"tables": {"entity": "SCHEMAFULL", "relates": "RELATION"}}],
+        [{"indexes": {"entity_name_type": "name,type UNIQUE"}}],
+        [entities],
+        [edges],
+    ]
+    monkeypatch.setattr("journal_utilities.rag.graph.surreal_client.AsyncSurreal", lambda _: db)
+    client = SurrealDBClient()
+    with pytest.raises(RuntimeError, match="[Aa]mbiguous|Conflicting"):
+        await client.connect(migrate_source_identity=True)
+    # No schema/data write was reached after the four evidence reads.
+    assert db.query.await_count == 4
+    db.close.assert_awaited_once()
 
-        with pytest.raises(RuntimeError, match="Database not connected"):
-            await client.create_entity(entity)
+
+async def test_metadata_only_source_stays_unknown(connected):
+    client, db = connected
+    db.query.return_value = [
+        [
+            {
+                "id": "entity:old",
+                "name": "Insight 1",
+                "type": "key_insight",
+                "metadata": {"source": "untrusted-claim.txt"},
+            }
+        ]
+    ]
+    summary = await client._admit_migration({"entity": "SCHEMAFULL"})
+    assert summary["legacy_entities_preserved"] == summary["unknown_source_entities"] == 1
+    db.create.assert_not_awaited()

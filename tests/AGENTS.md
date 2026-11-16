@@ -2,9 +2,10 @@
 
 ## Test Suite Overview
 
-The suite is a live snapshot (currently ~475 passing, 3 API-gated skips, snapshot
-of `uv run pytest tests/ -q` on 2026-08-02); run
-`uv run pytest tests/ -q` for the current count.
+Counts and coverage are generated measurements, not maintained prose. See
+[`../docs/_generated/gate-arms.md`](../docs/_generated/gate-arms.md) for the
+recorded source, runtime, results and limitations. Regenerate only with the
+documented gate prerequisites available; historical receipts are not current proof.
 
 ## Running Tests
 
@@ -59,6 +60,12 @@ async def test_real_extraction():
     result = extractor.extract_core_entities(transcript)
     # ...
 ```
+
+SDK doubles must match the installed SDK's actual return shapes. They cannot
+qualify database schema or persistence behavior. The disposable-database
+acceptance in `journal_utilities/rag/test_source_identity.py` requires explicit
+service admission and checks migration, source isolation, failure recovery and
+replay against a real server. A skipped database case is not qualification.
 
 ## Adding Tests
 

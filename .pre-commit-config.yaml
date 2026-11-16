@@ -1,7 +1,7 @@
 # Pre-commit gates — mirror the `gate` job in .github/workflows/test.yml:
 # ruff check, ruff format, mypy on src (the same arms `run.py gate` runs).
-# Replaces black: ruff format is the repo formatter (see [tool.ruff] in
-# pyproject.toml); the black config/dev-dep removal is tracked in TODO.md.
+# Ruff format is the repo formatter (see [tool.ruff] in pyproject.toml).
+# The black configuration and development dependency were removed in E2.
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit

@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from journal_utilities.interface.chat_engine import ChatEngine
 from journal_utilities.interface.data_loader import DataLoader
@@ -30,9 +31,48 @@ logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-# Upper bound on a single chat message; the body is otherwise read unbounded
-# and forwarded to Ollama (memory + LLM-cost DoS).
 MAX_MESSAGE_LENGTH = 32_000
+MAX_SESSION_LENGTH = 200
+# JSON can escape one non-BMP character as two six-byte Unicode escapes.
+MAX_CHAT_BODY_BYTES = 12 * (MAX_MESSAGE_LENGTH + MAX_SESSION_LENGTH) + 1024
+
+
+class _ChatRequest(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    session_id: str = "default"
+    message: str = ""
+    use_rag: bool = True
+
+
+async def _read_chat_request(request: Request, *, require_message: bool) -> _ChatRequest:
+    """Bound retained bytes before JSON decoding, independent of Content-Length."""
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        try:
+            length = int(declared)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length") from exc
+        if length < 0:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length")
+        if length > MAX_CHAT_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Chat request body too large")
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > MAX_CHAT_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Chat request body too large")
+        body.extend(chunk)
+    try:
+        payload = _ChatRequest.model_validate_json(body)
+    except ValidationError as exc:
+        errors = exc.errors(include_input=False, include_context=False, include_url=False)
+        status = 400 if any(error["type"] == "json_invalid" for error in errors) else 422
+        raise HTTPException(status_code=status, detail="Invalid chat request") from exc
+    if len(payload.message) > MAX_MESSAGE_LENGTH or len(payload.session_id) > MAX_SESSION_LENGTH:
+        raise HTTPException(status_code=413, detail="Message or session id too long")
+    if require_message and not payload.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    return payload
 
 
 def create_app(data_dir: Path | None = None) -> FastAPI:
@@ -84,8 +124,8 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         has_transcript: bool | None = None,
         sort_by: str = "upload_date",
         reverse: bool = True,
-        offset: int = 0,
-        limit: int = Query(default=50, le=200),
+        offset: int = Query(default=0, ge=0),
+        limit: int = Query(default=50, ge=1, le=200),
         q: str | None = None,
     ) -> dict[str, Any]:
         """Get paginated, filterable list of videos."""
@@ -252,7 +292,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     @app.get("/api/search")
     async def search(
         q: str = Query(..., min_length=2),
-        limit: int = Query(default=20, le=100),
+        limit: int = Query(default=20, ge=1, le=100),
     ) -> dict[str, Any]:
         """Full-text search across all transcripts."""
         results = loader.search_index.search(q, limit=limit)
@@ -282,47 +322,25 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
 
     @app.post("/api/chat")
     async def chat_message(request: Request) -> dict[str, Any]:
-        """Send a chat message (non-streaming)."""
-        body = await request.json()
-        session_id = body.get("session_id", "default")
-        message = body.get("message", "")
-        use_rag = body.get("use_rag", True)
-
-        if not message.strip():
-            raise HTTPException(status_code=400, detail="Message cannot be empty")
-        if len(message) > MAX_MESSAGE_LENGTH or len(session_id) > 200:
-            raise HTTPException(status_code=413, detail="Message or session id too long")
-
-        return await chat_engine.chat(session_id, message, use_rag=use_rag)
+        """Send a validated, bounded chat message (non-streaming)."""
+        payload = await _read_chat_request(request, require_message=True)
+        return await chat_engine.chat(payload.session_id, payload.message, use_rag=payload.use_rag)
 
     @app.post("/api/chat/stream")
     async def chat_stream(request: Request) -> StreamingResponse:
-        """Send a chat message with streaming response (SSE)."""
-        body = await request.json()
-        session_id = body.get("session_id", "default")
-        message = body.get("message", "")
-        use_rag = body.get("use_rag", True)
-
-        if not message.strip():
-            raise HTTPException(status_code=400, detail="Message cannot be empty")
-        if len(message) > MAX_MESSAGE_LENGTH or len(session_id) > 200:
-            raise HTTPException(status_code=413, detail="Message or session id too long")
-
+        """Validate completely before opening a streaming response."""
+        payload = await _read_chat_request(request, require_message=True)
         return StreamingResponse(
-            chat_engine.chat_stream(session_id, message, use_rag=use_rag),
+            chat_engine.chat_stream(payload.session_id, payload.message, use_rag=payload.use_rag),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-            },
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
     @app.post("/api/chat/clear")
     async def chat_clear(request: Request) -> dict[str, str]:
-        """Clear a chat session."""
-        body = await request.json()
-        session_id = body.get("session_id", "default")
-        chat_engine.clear_session(session_id)
+        """Clear a validated session without calling a provider."""
+        payload = await _read_chat_request(request, require_message=False)
+        chat_engine.clear_session(payload.session_id)
         return {"status": "cleared"}
 
     # ------------------------------------------------------------------

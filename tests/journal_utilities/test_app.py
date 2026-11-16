@@ -12,14 +12,57 @@ import pytest
 
 # Requires the interface extra; skip cleanly when it is not installed.
 pytest.importorskip("fastapi")
+httpx = pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
 
 from journal_utilities.interface import chat_engine
-from journal_utilities.interface.app import create_app
+from journal_utilities.interface.app import (
+    MAX_CHAT_BODY_BYTES,
+    MAX_MESSAGE_LENGTH,
+    MAX_SESSION_LENGTH,
+    create_app,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def ollama_transport(monkeypatch):
+    """Run real ChatEngine logic, with only HTTP transport replaced; never sockets."""
+    state = {"requests": [], "fail": False}
+    client_type = httpx.AsyncClient
+
+    def handle(request):
+        state["requests"].append(request)
+        if state["fail"]:
+            raise httpx.ConnectError(
+                "Connection to http://private-host:11434 failed", request=request
+            )
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"name": chat_engine.OLLAMA_MODEL}]})
+        assert request.url.path == "/api/chat"
+        payload = json.loads(request.content)
+        if payload["stream"]:
+            return httpx.Response(
+                200,
+                content=(
+                    json.dumps({"message": {"content": "Bounded answer"}, "done": False})
+                    + "\n"
+                    + json.dumps({"done": True})
+                    + "\n"
+                ),
+                headers={"content-type": "application/x-ndjson"},
+            )
+        return httpx.Response(200, json={"message": {"content": "Bounded answer"}})
+
+    def client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handle)
+        return client_type(*args, **kwargs)
+
+    monkeypatch.setattr(chat_engine.httpx, "AsyncClient", client)
+    return state
 
 
 @pytest.fixture
@@ -265,8 +308,8 @@ class TestChatEndpoints:
         resp = test_client.get("/api/chat/status")
         assert resp.status_code == 200
         data = resp.json()
-        # If Ollama is not running, this should still succeed
-        assert "available" in data or "error" in data
+        assert data["available"] is True
+        assert data["current_model"] == chat_engine.OLLAMA_MODEL
 
     def test_chat_empty_message_rejected(self, test_client: TestClient):
         """POST /api/chat rejects empty messages."""
@@ -384,30 +427,18 @@ class TestSearchEndpointAdditional:
 class TestChatEndpointsAdditional:
     """Additional chat endpoint tests."""
 
-    def test_chat_with_valid_message_returns_response(
-        self, test_client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ):
-        """POST /api/chat with a valid message returns a graceful response.
-
-        With no Ollama reachable the endpoint returns 200 with a sanitized
-        generic error — it must not leak raw exception detail. The endpoint is
-        pointed at a dead port so a developer machine running `ollama serve`
-        still exercises the offline path instead of a live model's answer.
-        """
-        monkeypatch.setattr(chat_engine, "OLLAMA_BASE_URL", "http://127.0.0.1:1")
-        resp = test_client.post(
-            "/api/chat",
-            json={
-                "session_id": "test_session",
-                "message": "What is active inference?",
-            },
-        )
+    def test_chat_with_valid_message_returns_response(self, test_client: TestClient):
+        resp = test_client.post("/api/chat", json={"message": "What is active inference?"})
         assert resp.status_code == 200
-        body = resp.json()
-        assert "response" in body
-        # Internal exception text (host/port/connection) must never be echoed.
-        assert "Connection" not in body.get("response", "")
-        assert "http" not in body.get("response", "").lower()
+        assert resp.json()["response"] == "Bounded answer"
+
+    def test_transport_failure_is_sanitized(self, test_client: TestClient, ollama_transport):
+        ollama_transport["fail"] = True
+        resp = test_client.post("/api/chat", json={"message": "What is active inference?"})
+        assert resp.status_code == 200
+        assert resp.json()["error"] is True
+        assert "private-host" not in resp.text
+        assert "http://" not in resp.text
 
     def test_chat_rejects_oversized_message(self, test_client: TestClient):
         """An over-long message is rejected (413), not forwarded to Ollama."""
@@ -416,3 +447,180 @@ class TestChatEndpointsAdditional:
             json={"session_id": "s", "message": "x" * 40_000},
         )
         assert resp.status_code == 413
+
+
+CHAT_ROUTES = ["/api/chat", "/api/chat/stream", "/api/chat/clear"]
+
+
+@pytest.mark.parametrize("route", CHAT_ROUTES)
+@pytest.mark.parametrize(
+    "body,status",
+    [
+        (b"null", 422),
+        (b"[]", 422),
+        (b"3", 422),
+        (b'"text"', 422),
+        (b"true", 422),
+        (b"{broken", 400),
+        (b"\xff", 400),
+        (b'{"message": null}', 422),
+        (b'{"message": []}', 422),
+        (b'{"message": 1}', 422),
+        (b'{"message": "hello", "session_id": null}', 422),
+        (b'{"message": "hello", "session_id": {}}', 422),
+        (b'{"message": "hello", "session_id": 1}', 422),
+        (b'{"message": "hello", "use_rag": "false"}', 422),
+        (b'{"message": "hello", "use_rag": 0}', 422),
+        (b'{"message": "hello", "use_rag": null}', 422),
+    ],
+)
+def test_invalid_chat_payloads_are_client_errors(
+    test_client, ollama_transport, route, body, status
+):
+    response = test_client.post(route, content=body, headers={"content-type": "application/json"})
+    assert response.status_code == status
+    assert ollama_transport["requests"] == []
+
+
+@pytest.mark.parametrize("route", ["/api/chat", "/api/chat/stream"])
+def test_exact_field_bounds_allow_escaped_unicode(test_client, route):
+    payload = {
+        "message": "😀" * MAX_MESSAGE_LENGTH,
+        "session_id": "s" * MAX_SESSION_LENGTH,
+        "use_rag": False,
+    }
+    response = test_client.post(
+        route, content=json.dumps(payload), headers={"content-type": "application/json"}
+    )
+    assert response.status_code == 200
+    if route.endswith("/stream"):
+        events = [
+            json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")
+        ]
+        assert [event["type"] for event in events] == ["context", "token", "done"]
+        assert events[1]["content"] == "Bounded answer"
+    else:
+        assert response.json()["response"] == "Bounded answer"
+
+
+@pytest.mark.parametrize("route", CHAT_ROUTES)
+@pytest.mark.parametrize(
+    "field,length", [("message", MAX_MESSAGE_LENGTH + 1), ("session_id", MAX_SESSION_LENGTH + 1)]
+)
+def test_field_limit_plus_one_never_reaches_transport(
+    test_client, ollama_transport, route, field, length
+):
+    payload = {"message": "hello", "session_id": "session", "use_rag": False, field: "x" * length}
+    assert test_client.post(route, json=payload).status_code == 413
+    assert ollama_transport["requests"] == []
+
+
+@pytest.mark.parametrize("extra,status", [(0, 200), (1, 413)])
+def test_exact_body_limit(test_client, extra, status):
+    message = b'{"message":"hello","use_rag":false}'
+    body = message + b" " * (MAX_CHAT_BODY_BYTES + extra - len(message))
+    assert test_client.post("/api/chat", content=body).status_code == status
+
+
+@pytest.mark.parametrize("route", CHAT_ROUTES)
+@pytest.mark.parametrize("declared", [None, b"1", str(MAX_CHAT_BODY_BYTES + 1).encode()])
+@pytest.mark.parametrize("single_chunk", [False, True])
+async def test_streamed_body_stops_before_full_accumulation(
+    sample_data_dir, ollama_transport, route, declared, single_chunk
+):
+    app = create_app(data_dir=sample_data_dir)
+    chunks = (
+        [b"x" * (MAX_CHAT_BODY_BYTES + 1), b"unread"]
+        if single_chunk
+        else [b"x" * (MAX_CHAT_BODY_BYTES - 5), b"0123456789", b"unread"]
+    )
+    consumed = 0
+    sent = []
+    headers = [(b"content-type", b"application/json")]
+    if declared is not None:
+        headers.append((b"content-length", declared))
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.4"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": route,
+        "raw_path": route.encode(),
+        "root_path": "",
+        "query_string": b"",
+        "headers": headers,
+        "server": ("test", 80),
+        "client": ("test", 1234),
+    }
+
+    async def receive():
+        nonlocal consumed
+        if consumed >= len(chunks) - 1:
+            pytest.fail("request drained beyond the byte cap")
+        chunk = chunks[consumed]
+        consumed += 1
+        return {"type": "http.request", "body": chunk, "more_body": True}
+
+    async def send(message):
+        sent.append(message)
+
+    await app(scope, receive, send)
+    assert (
+        next(message["status"] for message in sent if message["type"] == "http.response.start")
+        == 413
+    )
+    assert consumed == (
+        0 if declared == str(MAX_CHAT_BODY_BYTES + 1).encode() else (1 if single_chunk else 2)
+    )
+    assert ollama_transport["requests"] == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/api/videos?offset=-1",
+        "/api/videos?limit=0",
+        "/api/videos?limit=-1",
+        "/api/videos?limit=201",
+        "/api/videos?q=active&offset=-1",
+        "/api/search?q=active&limit=0",
+        "/api/search?q=active&limit=-1",
+        "/api/search?q=active&limit=101",
+    ],
+)
+def test_pagination_rejects_invalid_bounds(test_client, url):
+    assert test_client.get(url).status_code == 422
+
+
+def test_pagination_upper_bounds_remain_valid(test_client):
+    videos = test_client.get("/api/videos?offset=0&limit=200")
+    assert videos.status_code == 200
+    assert videos.json()["total"] == 3
+    results = test_client.get("/api/search?q=Bayesian&limit=100")
+    assert results.status_code == 200
+    assert results.json()["results"][0]["video_id"] == "vid_bbb22222222"
+
+
+def test_clear_removes_history_without_provider_call(test_client, ollama_transport):
+    assert (
+        test_client.post(
+            "/api/chat", json={"session_id": "s", "message": "first", "use_rag": False}
+        ).status_code
+        == 200
+    )
+    before = len(ollama_transport["requests"])
+    assert test_client.post("/api/chat/clear", json={"session_id": "s"}).json() == {
+        "status": "cleared"
+    }
+    assert len(ollama_transport["requests"]) == before
+    assert (
+        test_client.post(
+            "/api/chat", json={"session_id": "s", "message": "second", "use_rag": False}
+        ).status_code
+        == 200
+    )
+    payload = json.loads(ollama_transport["requests"][-1].content)
+    assert [message["content"] for message in payload["messages"] if message["role"] == "user"] == [
+        "second"
+    ]

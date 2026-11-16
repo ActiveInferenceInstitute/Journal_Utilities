@@ -2,6 +2,9 @@
 Unit tests for EntityAdapter conversion functions.
 """
 
+import pytest
+from pydantic import ValidationError
+
 from journal_utilities.rag.adapters.entity_adapter import EntityAdapter
 from journal_utilities.rag.models import Entity
 from journal_utilities.rag.models.entities import (
@@ -26,7 +29,7 @@ class TestConvertCoreEntities:
             concepts=[], researchers=[], citations=[], technical_terms=[], key_insights=[]
         )
 
-        entities = EntityAdapter.convert_core_entities(core)
+        entities = EntityAdapter.convert_core_entities(core, source="transcripts/a.txt")
 
         assert len(entities) == 0
 
@@ -47,7 +50,7 @@ class TestConvertCoreEntities:
             key_insights=[],
         )
 
-        entities = EntityAdapter.convert_core_entities(core)
+        entities = EntityAdapter.convert_core_entities(core, source="transcripts/a.txt")
 
         assert len(entities) >= 1
         concept_entity = next((e for e in entities if e.name == "Active Inference"), None)
@@ -66,7 +69,7 @@ class TestConvertCoreEntities:
             key_insights=[],
         )
 
-        entities = EntityAdapter.convert_core_entities(core)
+        entities = EntityAdapter.convert_core_entities(core, source="transcripts/a.txt")
 
         assert len(entities) >= 1
         researcher_entity = next((e for e in entities if e.name == "Karl Friston"), None)
@@ -90,7 +93,7 @@ class TestConvertCoreEntities:
             key_insights=[],
         )
 
-        entities = EntityAdapter.convert_core_entities(core)
+        entities = EntityAdapter.convert_core_entities(core, source="transcripts/a.txt")
 
         assert len(entities) >= 1
         citation_entity = next((e for e in entities if "Free Energy Principle" in e.name), None)
@@ -113,7 +116,7 @@ class TestConvertCoreEntities:
             key_insights=[],
         )
 
-        entities = EntityAdapter.convert_core_entities(core)
+        entities = EntityAdapter.convert_core_entities(core, source="transcripts/a.txt")
 
         assert len(entities) >= 1
         term_entity = next((e for e in entities if e.name == "Variational Free Energy"), None)
@@ -130,7 +133,7 @@ class TestConvertCoreEntities:
             key_insights=["Active Inference unifies perception and action"],
         )
 
-        entities = EntityAdapter.convert_core_entities(core)
+        entities = EntityAdapter.convert_core_entities(core, source="transcripts/a.txt")
 
         assert len(entities) >= 1
         # The adapter names insights as "Insight 1", "Insight 2", etc.
@@ -156,7 +159,7 @@ class TestConvertCoreEntities:
             key_insights=["Insight1"],
         )
 
-        entities = EntityAdapter.convert_core_entities(core)
+        entities = EntityAdapter.convert_core_entities(core, source="transcripts/a.txt")
 
         # Should have at least 5 entities (one of each type)
         assert len(entities) >= 5
@@ -178,7 +181,7 @@ class TestExtractRelationships:
             concepts=[], researchers=[], citations=[], technical_terms=[], key_insights=[]
         )
 
-        relationships = EntityAdapter.extract_relationships(core)
+        relationships = EntityAdapter.extract_relationships(core, source="transcripts/a.txt")
 
         assert len(relationships) == 0
 
@@ -199,7 +202,7 @@ class TestExtractRelationships:
             key_insights=[],
         )
 
-        relationships = EntityAdapter.extract_relationships(core)
+        relationships = EntityAdapter.extract_relationships(core, source="transcripts/a.txt")
 
         # Should have 2 relationships from related_concepts
         assert len(relationships) >= 2
@@ -211,6 +214,7 @@ class TestEntityModel:
     def test_entity_creation(self):
         """Test basic entity creation."""
         entity = Entity(
+            source="transcripts/a.txt",
             name="Test Entity",
             type="concept",
             description="A test",
@@ -225,16 +229,15 @@ class TestEntityModel:
         assert entity.mentions == 3
         assert len(entity.context) == 2
 
-    def test_entity_default_values(self):
-        """Test entity has sensible defaults."""
-        entity = Entity(name="Minimal", type="concept", confidence=0.8, mentions=1, context=[])
-
-        assert entity.description == ""
-        assert entity.metadata == {}
+    @pytest.mark.parametrize("source", [None, "", "   "])
+    def test_entity_requires_trusted_source(self, source):
+        with pytest.raises(ValidationError):
+            Entity(name="Insight 1", type="key_insight", source=source)
 
     def test_entity_with_metadata(self):
         """Test entity with custom metadata."""
         entity = Entity(
+            source="transcripts/a.txt",
             name="Test",
             type="concept",
             confidence=0.9,
@@ -245,3 +248,17 @@ class TestEntityModel:
 
         assert entity.metadata["source"] == "transcript"
         assert entity.metadata["importance"] == "high"
+
+
+def test_caller_source_overrides_extraction_metadata(sample_core_entities):
+    from journal_utilities.rag.models import ExtractedEntities
+
+    extracted = ExtractedEntities(core=sample_core_entities, metadata={"source": "untrusted"})
+    entities, relationships = EntityAdapter.convert_extracted_entities(
+        extracted, source="trusted.txt"
+    )
+    assert {entity.source for entity in entities} == {"trusted.txt"}
+    assert {relationship.transcript_source for relationship in relationships} == {"trusted.txt"}
+    assert {
+        (relationship.source_type, relationship.target_type) for relationship in relationships
+    } == {("researcher", "citation")}

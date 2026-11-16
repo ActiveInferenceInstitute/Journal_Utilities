@@ -98,3 +98,15 @@ it runs the live download tests.
 2. Add the row to the arms table above and any rule it enforces to the doc it protects.
 3. Run `uv run python run.py gate <arm>` and, if the timing page should change,
    `uv run python run.py gate report`.
+
+## Listener ownership and corpus selection
+
+`serve` refuses an occupied port without discovering or signalling its owner.
+Stop that owner explicitly or choose another configured port.
+`general.data_dir` is passed to the web application: relative paths resolve
+against the project root; absolute paths remain absolute.
+
+`make extract-entities` selects pending database work and resolves relative
+transcript paths under `RAG_BASE_PATH` (default `.`).
+`make format` runs both Ruff operations over `src/ tests/ scripts/`; it changes
+files and is not an acceptance-only command.

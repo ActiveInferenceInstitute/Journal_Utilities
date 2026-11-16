@@ -85,3 +85,26 @@ The frontend files are served directly from `src/journal_utilities/interface/sta
 - `src/journal_utilities/interface/app.py`: Main application logic.
 - `src/journal_utilities/interface/static/app.js`: Core frontend logic (routing, rendering).
 - `src/journal_utilities/interface/static/index.html`: Base layout.
+
+## Request admission limits
+
+Chat, streaming chat and clear-session requests must be JSON objects with
+string `session_id` (default `default`, at most 200 characters), string `message`
+(default empty, at most 32000 characters), and boolean `use_rag` (default true).
+Chat and streaming require a nonblank message. Clear validates provided fields
+but does not require a message. Malformed JSON or an empty required message
+returns 400; invalid shapes/types return 422; byte or field limits return 413
+before a provider request or streaming response starts.
+
+The application retains at most 387424 body bytes before JSON decoding and
+rejects an over-limit chunk before appending it. Streamed bytes are checked even
+with missing or understated Content-Length. This does not bound upstream
+server/ASGI transport allocations.
+
+Video pagination requires offset >= 0 and limit 1..200. Search requires limit
+1..100; internal unlimited search remains available through `limit=None`.
+
+`run.py serve` uses the configured corpus and refuses occupied ports without
+terminating another process. Browser fixtures must use canonical 11-character
+YouTube IDs; external thumbnails, fonts and embedded video still need network
+access independently of the locally served transcript.
