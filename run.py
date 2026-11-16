@@ -24,7 +24,6 @@ import configparser
 import json
 import logging
 import os
-import signal
 import socket
 import subprocess
 import sys
@@ -227,12 +226,19 @@ def cmd_export(config: configparser.ConfigParser, _args: argparse.Namespace) -> 
         print("⚠  No transcripts found to export")
         return 1
 
+    failures = 0
+    outcomes = 0
     for fmt_name, fmt_results in results.items():
         ok = sum(1 for r in fmt_results if r.status == "success")
         skip = sum(1 for r in fmt_results if r.status == "skipped")
         fail = sum(1 for r in fmt_results if r.status == "failed")
+        failures += fail
+        outcomes += len(fmt_results)
         print(f"  {fmt_name}: {ok} exported, {skip} skipped, {fail} failed")
 
+    if failures or not outcomes:
+        print("\n✗ Export incomplete")
+        return 1
     print("\n✓ Export complete")
     return 0
 
@@ -287,36 +293,6 @@ def _port_in_use(port: int) -> bool:
             return True
 
 
-def _free_port(port: int) -> bool:
-    """Try to kill whatever is occupying *port*.  Return True on success."""
-    try:
-        result = subprocess.run(
-            ["lsof", "-ti", f":{port}"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        pids = result.stdout.strip().split()
-        if not pids:
-            return True
-
-        my_pid = str(os.getpid())
-        for pid in pids:
-            if pid == my_pid:
-                continue
-            logger.info("Killing stale process %s on port %d", pid, port)
-            os.kill(int(pid), signal.SIGTERM)
-
-        # Brief wait for cleanup
-        import time as _t
-
-        _t.sleep(0.5)
-        return not _port_in_use(port)
-    except Exception as exc:
-        logger.warning("Could not free port %d: %s", port, exc)
-        return False
-
-
 def cmd_serve(config: configparser.ConfigParser, _args: argparse.Namespace) -> int:
     """Start the web interface."""
     import uvicorn
@@ -327,23 +303,19 @@ def cmd_serve(config: configparser.ConfigParser, _args: argparse.Namespace) -> i
     port_str = get_str(config, "interface", "port", "8000")
     port = int(port_str)
 
-    # ── Auto-resolve port conflicts ────────────────────────────────
+    # An existing listener belongs to its owner; never kill or reclaim it.
     if _port_in_use(port):
-        logger.warning("Port %d already in use — attempting to free it", port)
-        if _free_port(port):
-            logger.info("Port %d freed successfully", port)
-        else:
-            logger.error("Cannot free port %d — aborting serve", port)
-            print(f"  ✗ Port {port} is occupied and could not be freed.")
-            print(f"    Try: lsof -ti :{port} | xargs kill -9")
-            return 1
+        logger.error("Port %d is already occupied; listener left untouched", port)
+        print(f"  ✗ Port {port} is occupied. Stop its owner explicitly or choose another port.")
+        return 1
 
     print(f"Starting web interface at http://{host}:{port}")
 
     # Configure uvicorn logging to match ours if needed,
     # but uvicorn has its own config. We'll let it handle itself.
     try:
-        app = create_app()
+        data_dir = PROJECT_ROOT / get_str(config, "general", "data_dir", "data/output")
+        app = create_app(data_dir=data_dir)
         # log_config=None tells uvicorn to use the existing logging configuration
         # which allows our root logger (with FileHandler) to capture the logs.
         uvicorn.run(app, host=host, port=port, log_config=None)
@@ -535,8 +507,9 @@ def cmd_default(config: configparser.ConfigParser, args: argparse.Namespace) -> 
         print("━" * 62)
         rc = cmd_export(config, args)
         if rc != 0:
-            logger.warning("Export step returned non-zero: %d", rc)
-            print(f"  ⚠  Export finished with warnings (exit code {rc})\n")
+            logger.error("Export step failed: %d", rc)
+            print(f"  ✗ Export failed (exit code {rc}) — aborting pipeline\n")
+            return rc
         else:
             print()
 

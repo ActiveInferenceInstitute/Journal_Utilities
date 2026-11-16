@@ -214,6 +214,24 @@ class TestBuildParser:
 
 
 class TestMain:
+    @pytest.fixture(autouse=True)
+    def isolated_runner_logging(self, tmp_path, monkeypatch):
+        import logging
+
+        import run
+
+        root = logging.getLogger()
+        handlers, level = list(root.handlers), root.level
+        monkeypatch.setattr(run, "PROJECT_ROOT", tmp_path)
+        try:
+            yield
+        finally:
+            for handler in list(root.handlers):
+                if handler not in handlers:
+                    handler.close()
+            root.handlers[:] = handlers
+            root.setLevel(level)
+
     def test_config_command_returns_zero(self, sample_config_file):
         rc = main(["--config", str(sample_config_file), "config"])
         assert rc == 0
@@ -302,3 +320,157 @@ class TestDefaultPipeline:
         assert "http://127.0.0.1:9000" in captured.out
         assert "Open in browser" in captured.out
         assert rc == 0
+
+
+@pytest.fixture
+def export_corpus(config, tmp_path, monkeypatch):
+    import run
+
+    monkeypatch.setattr(run, "PROJECT_ROOT", tmp_path)
+    transcripts = tmp_path / "data" / "output" / "transcripts"
+    transcripts.mkdir(parents=True)
+    config.set("export", "markdown", "false")
+    return config, transcripts, tmp_path / "data" / "export" / "plaintext"
+
+
+def test_export_empty_directory_is_incomplete(export_corpus):
+    import argparse
+
+    import run
+
+    cfg, _, _ = export_corpus
+    assert run.cmd_export(cfg, argparse.Namespace()) == 1
+
+
+@pytest.mark.parametrize("bad_bytes", [b"   ", b"\xff\xfe"])
+def test_export_mixed_success_and_failure_is_nonzero(export_corpus, bad_bytes):
+    import argparse
+
+    import run
+
+    cfg, transcripts, output = export_corpus
+    (transcripts / "good.txt").write_text("A valid transcript", encoding="utf-8")
+    (transcripts / "bad.txt").write_bytes(bad_bytes)
+    assert run.cmd_export(cfg, argparse.Namespace()) == 1
+    assert "A valid transcript" in (output / "good.txt").read_text(encoding="utf-8")
+    assert not (output / "bad.txt").exists()
+
+
+def test_export_read_permission_failure_is_nonzero(export_corpus, monkeypatch):
+    import argparse
+
+    import run
+
+    cfg, transcripts, _ = export_corpus
+    blocked = transcripts / "blocked.txt"
+    blocked.write_text("Cannot read", encoding="utf-8")
+    read_text = Path.read_text
+
+    def guarded_read(path, *args, **kwargs):
+        if path == blocked:
+            raise PermissionError("Access denied")
+        return read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", guarded_read)
+    assert run.cmd_export(cfg, argparse.Namespace()) == 1
+
+
+def test_export_success_and_existing_outputs_remain_successful(export_corpus):
+    import argparse
+
+    import run
+
+    cfg, transcripts, output = export_corpus
+    (transcripts / "good.txt").write_text("A valid transcript", encoding="utf-8")
+    assert run.cmd_export(cfg, argparse.Namespace()) == 0
+    saved = (output / "good.txt").read_bytes()
+    assert run.cmd_export(cfg, argparse.Namespace()) == 0
+    assert (output / "good.txt").read_bytes() == saved
+
+
+@pytest.mark.parametrize("command", ["cmd_full", "cmd_default"])
+def test_required_export_failure_stops_pipeline(export_corpus, monkeypatch, command):
+    import argparse
+
+    import run
+
+    cfg, transcripts, _ = export_corpus
+    (transcripts / "empty.txt").write_text("", encoding="utf-8")
+    monkeypatch.setattr(run, "cmd_download", lambda *_: 0)
+    monkeypatch.setattr(run, "cmd_test", lambda *_: pytest.fail("tests started after failed export"))
+    monkeypatch.setattr(run, "cmd_serve", lambda *_: pytest.fail("server started after failed export"))
+    assert getattr(run, command)(cfg, argparse.Namespace()) == 1
+
+
+def test_occupied_listener_survives_serve_refusal(config, monkeypatch):
+    import argparse
+    import socket
+
+    import run
+
+    uvicorn = pytest.importorskip("uvicorn")
+    pytest.importorskip("fastapi")
+    monkeypatch.setattr(run.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("listener discovery attempted"))
+    monkeypatch.setattr(run.os, "kill", lambda *_args, **_kwargs: pytest.fail("listener termination attempted"))
+    monkeypatch.setattr(uvicorn, "run", lambda *_args, **_kwargs: pytest.fail("occupied server started"))
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        listener.settimeout(2)
+        port = listener.getsockname()[1]
+        config.set("interface", "port", str(port))
+        assert run.cmd_serve(config, argparse.Namespace()) == 1
+        with socket.create_connection(("127.0.0.1", port), timeout=2) as probe:
+            accepted, _ = listener.accept()
+            with accepted:
+                probe.sendall(b"still alive")
+                assert accepted.recv(11) == b"still alive"
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+def test_serve_loads_configured_corpus(config, tmp_path, monkeypatch, absolute):
+    import argparse
+    import json
+
+    import run
+
+    uvicorn = pytest.importorskip("uvicorn")
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    chosen = tmp_path / "chosen"
+    chosen.mkdir()
+    (chosen / "channel_videos.json").write_text(json.dumps({"videos": [
+        {"id": "chosen12345", "title": "Chosen corpus", "upload_date": "20250101"}
+    ]}), encoding="utf-8")
+    monkeypatch.setattr(run, "PROJECT_ROOT", tmp_path)
+    config.set("general", "data_dir", str(chosen) if absolute else "chosen")
+    config.set("interface", "port", "0")
+    observed = []
+
+    def serve_boundary(app, **_kwargs):
+        with TestClient(app) as client:
+            response = client.get("/api/videos")
+            observed.extend(video["id"] for video in response.json()["videos"])
+
+    monkeypatch.setattr(uvicorn, "run", serve_boundary)
+    assert run.cmd_serve(config, argparse.Namespace()) == 0
+    assert observed == ["chosen12345"]
+
+
+def test_export_writer_failure_is_nonzero(export_corpus, monkeypatch):
+    import argparse
+
+    import run
+
+    cfg, transcripts, output = export_corpus
+    (transcripts / "blocked.txt").write_text("Readable input", encoding="utf-8")
+    write_text = Path.write_text
+
+    def guarded_write(path, *args, **kwargs):
+        if path == output / "blocked.txt":
+            raise OSError("Output device unavailable")
+        return write_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", guarded_write)
+    assert run.cmd_export(cfg, argparse.Namespace()) == 1

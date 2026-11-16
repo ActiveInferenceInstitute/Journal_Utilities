@@ -10,7 +10,7 @@ Run these tests with:
 import os
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 import pytest
 
@@ -27,7 +27,7 @@ from journal_utilities.rag.settings import settings
 @pytest.fixture
 def sample_transcript_file() -> Path:
     """Get path to sample transcript file."""
-    return Path(__file__).parent.parent.parent / "fixtures" / "sample_transcript.txt"
+    return Path(__file__).parent.parent.parent.parent / "fixtures" / "sample_transcript.txt"
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def mock_db_client():
     """Mock database client to avoid needing SurrealDB."""
     mock = AsyncMock()
     mock.get_or_create_transcript.return_value = "transcript:test-001"
-    mock.create_entity.return_value = "entity:test-001"
+    mock.create_entity.side_effect = lambda entity: f"entity:{entity.type}-{entity.name}"
     mock.create_relationship.return_value = "relates:test-001"
     mock.update_transcript_status.return_value = None
     return mock
@@ -91,9 +91,10 @@ async def test_process_transcript_with_real_extractor(
     # Verify database interactions occurred
     mock_db_client.get_or_create_transcript.assert_called_once()
     assert mock_db_client.create_entity.call_count > 0
-    mock_db_client.update_transcript_status.assert_called_once_with(
-        "transcript:test-001", processed=True
-    )
+    mock_db_client.update_transcript_status.assert_has_awaits([
+        call("transcript:test-001", processed=False),
+        call("transcript:test-001", processed=True),
+    ])
 
     # Verify stats from real extraction
     assert "entities" in stats

@@ -76,3 +76,11 @@ html = true
 # Output directory relative to project root
 output_dir = data/export
 ```
+
+## Required export completion
+
+`run.py export` returns nonzero when no outcomes are produced or any requested
+export fails, including mixed-success batches. Successfully written or
+already-existing nonempty outputs remain available. `full` and the default
+pipeline propagate required export failure; the default pipeline does not
+continue to tests or serving after that failure, independently of `test_strict`.

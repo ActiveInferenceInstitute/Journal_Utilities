@@ -2,6 +2,7 @@
 
 JOURNAL_DIR ?= ../ActiveInferenceJournal
 MANIFEST ?= data/output/channel_videos.json
+RAG_BASE_PATH ?= .
 
 # Load .env file if it exists
 ifneq (,$(wildcard .env))
@@ -69,8 +70,8 @@ lint:
 	uv run python run.py gate lint format
 
 format:
-	uv run ruff format src/ tests/
-	uv run ruff check --fix src/ tests/
+	uv run ruff format src/ tests/ scripts/
+	uv run ruff check --fix src/ tests/ scripts/
 
 db-start:
 	surreal start --log trace --user root --pass root --bind 0.0.0.0:8080 rocksdb://./data/database
@@ -112,7 +113,7 @@ extract-entities:
 		echo "Error: COHERE_API_KEY not found in .env file"; \
 		exit 1; \
 	fi
-	uv run python -m journal_utilities.rag.main
+	uv run python -m journal_utilities.rag.main --pending --base-path "$(RAG_BASE_PATH)"
 
 enumerate-channel:
 	@echo "Enumerating videos on the Active Inference channel..."

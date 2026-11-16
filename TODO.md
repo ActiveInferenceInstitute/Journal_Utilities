@@ -2,8 +2,44 @@
 
 **Status:** Maintained
 **Owner:** Active Inference Institute / Journal-Utilities maintainers
-**Last reviewed:** 2026-11-12 (verification pass — Publishing contract migration, gate
-re-run on this checkout, pin and formatter state confirmed; see the pass-5 entry below)
+**Last reviewed:** 2026-11-13 (source-qualified CLI/API, disposable-database and
+browser acceptance; earlier dated passes below retain their historical scope).
+
+---
+
+## Pass 6 — pipeline and graph reliability (2026-11-13)
+
+- [x] **J1/J3 — Serve ownership and corpus** — occupied ports are refused without
+      killing their owners. The configured corpus reaches the actual web app;
+      browser navigation displayed its title and transcript with external media blocked.
+- [x] **J2 — Required exports** — empty outcomes and mixed-success failures return
+      nonzero; required failure stops `full` and default orchestration.
+- [x] **J4/J6 — Source identity and replay** — trusted source/type/name identity,
+      record-ID endpoints and deterministic edges prevent cross-source merging.
+      Explicit legacy migration preserves unknown-source rows and refuses conflicting
+      claims; failed edges remain pending and retry preserves historical dates.
+      Real in-memory SurrealDB 4.0.1 acceptance used SDK 3.0.0, including injected
+      write failure and replay. No production database was accessed or migrated.
+- [x] **J5/A1 — Extraction entry point** — explicit file or pending selection performs
+      work, reports totals and propagates failures. Empty queues do not construct
+      the provider. `make extract-entities` selects pending work under `RAG_BASE_PATH`.
+- [x] **J7 — Request boundaries** — bounded body ingestion, typed chat fields,
+      pre-stream errors and bounded public pagination are covered by focused tests.
+- [x] **O3/O4/O5/A2 — Maintenance** — reviewed format-only commit recorded for blame;
+      stale test-count prose and Black commentary removed; both Makefile formatter
+      operations now include `scripts/`.
+
+Focused Python 3.12 checks, actual database acceptance and browser navigation
+passed. This is not a full-suite, coverage, hosted-CI, live-Cohere or production
+migration claim. Historical M10 metadata stamping and ME2 module-path repair
+were partial steps, not prior proof of complete identity or extraction behavior.
+The dated measurement files remain unchanged.
+
+Still open: hosted billing, qualified exact-pin GNN admission (no automatic pin
+bump), canonical Publishing producer adoption, admitted full-gate measurements,
+GPU/live-provider/YouTube-write qualification, the sibling translation migration,
+and the owner-scheduled description backlog. Existing dated entries retain the
+details of those external and ownership constraints.
 
 ---
 

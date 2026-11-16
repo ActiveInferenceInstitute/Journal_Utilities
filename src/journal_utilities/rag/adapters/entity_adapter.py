@@ -15,7 +15,7 @@ class EntityAdapter:
     """Converts CoreEntities to simple Entity and Relationship models for database storage."""
 
     @staticmethod
-    def convert_core_entities(core: CoreEntities) -> Sequence[Entity]:
+    def convert_core_entities(core: CoreEntities, *, source: str) -> Sequence[Entity]:
         """Convert CoreEntities to a flat list of Entity objects.
 
         Args:
@@ -30,6 +30,7 @@ class EntityAdapter:
         for concept in core.concepts:
             entities.append(
                 Entity(
+                    source=source,
                     name=concept.name,
                     type="concept",
                     description=concept.definition,
@@ -47,6 +48,7 @@ class EntityAdapter:
         for researcher in core.researchers:
             entities.append(
                 Entity(
+                    source=source,
                     name=researcher.name,
                     type="researcher",
                     description=researcher.contribution or "",
@@ -64,6 +66,7 @@ class EntityAdapter:
         for citation in core.citations:
             entities.append(
                 Entity(
+                    source=source,
                     name=citation.title,
                     type="citation",
                     description=citation.context or "",
@@ -84,6 +87,7 @@ class EntityAdapter:
         for term in core.technical_terms:
             entities.append(
                 Entity(
+                    source=source,
                     name=term.term,
                     type="technical_term",
                     description=term.explanation,
@@ -101,6 +105,7 @@ class EntityAdapter:
         for idx, insight in enumerate(core.key_insights):
             entities.append(
                 Entity(
+                    source=source,
                     name=f"Insight {idx + 1}",
                     type="key_insight",
                     description=insight,
@@ -114,7 +119,7 @@ class EntityAdapter:
         return entities
 
     @staticmethod
-    def convert_detailed_analysis(detailed: DetailedAnalysis) -> Sequence[Entity]:
+    def convert_detailed_analysis(detailed: DetailedAnalysis, *, source: str) -> Sequence[Entity]:
         """Convert DetailedAnalysis to a flat list of Entity objects.
 
         Args:
@@ -129,6 +134,7 @@ class EntityAdapter:
         for method in detailed.methods_techniques:
             entities.append(
                 Entity(
+                    source=source,
                     name=method.name,
                     type="method_technique",
                     description=method.description,
@@ -146,6 +152,7 @@ class EntityAdapter:
         for notation in detailed.mathematical_notation:
             entities.append(
                 Entity(
+                    source=source,
                     name=notation.notation,
                     type="mathematical_notation",
                     description=notation.meaning,
@@ -162,6 +169,7 @@ class EntityAdapter:
         for equation in detailed.equations:
             entities.append(
                 Entity(
+                    source=source,
                     name=equation.name or equation.formula[:50],
                     type="equation",
                     description=equation.context or "",
@@ -178,6 +186,7 @@ class EntityAdapter:
         for tool in detailed.tools_resources:
             entities.append(
                 Entity(
+                    source=source,
                     name=tool.name,
                     type="tool_resource",
                     description=tool.purpose or "",
@@ -195,6 +204,7 @@ class EntityAdapter:
         for problem in detailed.research_problems:
             entities.append(
                 Entity(
+                    source=source,
                     name=problem.problem[:100],  # Use first 100 chars as name
                     type="research_problem",
                     description=problem.problem,
@@ -212,6 +222,7 @@ class EntityAdapter:
         for application in detailed.applications:
             entities.append(
                 Entity(
+                    source=source,
                     name=f"{application.domain} Application",
                     type="application",
                     description=application.description,
@@ -228,7 +239,7 @@ class EntityAdapter:
         return entities
 
     @staticmethod
-    def extract_relationships(core: CoreEntities) -> Sequence[Relationship]:
+    def extract_relationships(core: CoreEntities, *, source: str) -> Sequence[Relationship]:
         """Extract relationships from CoreEntities structure.
 
         Args:
@@ -244,6 +255,9 @@ class EntityAdapter:
             for related_concept in concept.related_concepts:
                 relationships.append(
                     Relationship(
+                        transcript_source=source,
+                        source_type="concept",
+                        target_type="concept",
                         source=concept.name,
                         target=related_concept,
                         relationship_type="related_to",
@@ -262,6 +276,9 @@ class EntityAdapter:
                 if author in researcher_names:
                     relationships.append(
                         Relationship(
+                            transcript_source=source,
+                            source_type="researcher",
+                            target_type="citation",
                             source=author,
                             target=citation.title,
                             relationship_type="authored",
@@ -276,31 +293,11 @@ class EntityAdapter:
 
     @classmethod
     def convert_extracted_entities(
-        cls, extracted: ExtractedEntities
+        cls, extracted: ExtractedEntities, *, source: str
     ) -> tuple[Sequence[Entity], Sequence[Relationship]]:
-        """Convert complete ExtractedEntities to entities and relationships.
-
-        Args:
-            extracted: Complete extraction result
-
-        Returns:
-            Tuple of (entities, relationships)
-        """
-        entities = list(cls.convert_core_entities(extracted.core))
-
+        """Use caller-owned provenance, never a scientific extraction's metadata."""
+        entities = list(cls.convert_core_entities(extracted.core, source=source))
         if extracted.detailed:
-            entities.extend(cls.convert_detailed_analysis(extracted.detailed))
-
-        # Stamp the transcript source onto every entity so the graph layer can
-        # scope merges per transcript — preventing "Insight 1" (or a truncated
-        # formula name) from one video silently merging with another's (M10).
-        source = getattr(extracted.core, "source", None)
-        if source:
-            for entity in entities:
-                meta = dict(entity.metadata)
-                meta.setdefault("source", source)
-                entity.metadata = meta
-
-        relationships = cls.extract_relationships(extracted.core)
-
+            entities.extend(cls.convert_detailed_analysis(extracted.detailed, source=source))
+        relationships = cls.extract_relationships(extracted.core, source=source)
         return entities, relationships

@@ -268,6 +268,7 @@ class Transcript(BaseModel):
 class Entity(BaseModel):
     """Simple generic entity for database storage."""
 
+    source: str = Field(..., min_length=1, pattern=r"\S", description="Trusted transcript source")
     name: str = Field(..., description="Entity name")
     type: str = Field(..., description="Entity type (concept, researcher, citation, etc.)")
     description: str = Field(default="", description="Description or definition")
@@ -280,6 +281,9 @@ class Entity(BaseModel):
 class Relationship(BaseModel):
     """Simple generic relationship for database storage."""
 
+    transcript_source: str = Field(..., min_length=1, pattern=r"\S", description="Trusted transcript source")
+    source_type: str = Field(..., description="Source entity type")
+    target_type: str = Field(..., description="Target entity type")
     source: str = Field(..., description="Source entity name")
     target: str = Field(..., description="Target entity name")
     relationship_type: str = Field(..., description="Type of relationship")
