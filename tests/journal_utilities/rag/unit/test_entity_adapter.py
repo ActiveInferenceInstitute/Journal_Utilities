@@ -254,9 +254,11 @@ def test_caller_source_overrides_extraction_metadata(sample_core_entities):
     from journal_utilities.rag.models import ExtractedEntities
 
     extracted = ExtractedEntities(core=sample_core_entities, metadata={"source": "untrusted"})
-    entities, relationships = EntityAdapter.convert_extracted_entities(extracted, source="trusted.txt")
+    entities, relationships = EntityAdapter.convert_extracted_entities(
+        extracted, source="trusted.txt"
+    )
     assert {entity.source for entity in entities} == {"trusted.txt"}
     assert {relationship.transcript_source for relationship in relationships} == {"trusted.txt"}
-    assert {(relationship.source_type, relationship.target_type) for relationship in relationships} == {
-        ("researcher", "citation")
-    }
+    assert {
+        (relationship.source_type, relationship.target_type) for relationship in relationships
+    } == {("researcher", "citation")}

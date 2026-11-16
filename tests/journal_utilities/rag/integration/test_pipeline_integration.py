@@ -91,10 +91,12 @@ async def test_process_transcript_with_real_extractor(
     # Verify database interactions occurred
     mock_db_client.get_or_create_transcript.assert_called_once()
     assert mock_db_client.create_entity.call_count > 0
-    mock_db_client.update_transcript_status.assert_has_awaits([
-        call("transcript:test-001", processed=False),
-        call("transcript:test-001", processed=True),
-    ])
+    mock_db_client.update_transcript_status.assert_has_awaits(
+        [
+            call("transcript:test-001", processed=False),
+            call("transcript:test-001", processed=True),
+        ]
+    )
 
     # Verify stats from real extraction
     assert "entities" in stats

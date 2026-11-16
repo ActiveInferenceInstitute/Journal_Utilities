@@ -25,15 +25,20 @@ def _date_from_filename(filename: str) -> datetime:
     match = re.search(r"(\d{4})[-_/. ](\d{1,2})[-_/. ](\d{1,2})", filename)
     if match:
         try:
-            return datetime(*(int(part) for part in match.groups()))
+            year, month, day = (int(part) for part in match.groups())
+            return datetime(year, month, day)
         except ValueError:
             pass
     return datetime.min
 
 
 def _load_transcript(path: Path, *, source: str) -> Transcript:
-    return Transcript(title=path.stem, date=_date_from_filename(path.name),
-                      content=path.read_text(encoding="utf-8"), source=source)
+    return Transcript(
+        title=path.stem,
+        date=_date_from_filename(path.name),
+        content=path.read_text(encoding="utf-8"),
+        source=source,
+    )
 
 
 class JournalRAGPipeline:
@@ -61,8 +66,10 @@ class JournalRAGPipeline:
         relationships = EntityAdapter.extract_relationships(core, source=transcript.source)
         identities = {(entity.type, entity.name) for entity in entities}
         for relationship in relationships:
-            for identity in ((relationship.source_type, relationship.source),
-                             (relationship.target_type, relationship.target)):
+            for identity in (
+                (relationship.source_type, relationship.source),
+                (relationship.target_type, relationship.target),
+            ):
                 if identity not in identities:
                     raise ValueError(f"Required relationship endpoint missing: {identity!r}")
         entity_ids = {}
@@ -83,8 +90,13 @@ class JournalRAGPipeline:
 
     async def process_from_database(self, base_path: Path | None = None) -> Mapping[str, int]:
         paths = await self.db_client.get_unprocessed_transcript_paths()
-        totals = {"total": len(paths), "processed": 0, "failed": 0,
-                  "total_entities": 0, "total_relationships": 0}
+        totals = {
+            "total": len(paths),
+            "processed": 0,
+            "failed": 0,
+            "total_entities": 0,
+            "total_relationships": 0,
+        }
         for source in paths:
             path = base_path / source if base_path is not None else Path(source)
             try:
@@ -94,17 +106,26 @@ class JournalRAGPipeline:
                 totals["total_relationships"] += stats["relationships"]
             except Exception as exc:
                 totals["failed"] += 1
-                logger.error("Transcript incomplete; remains pending", source=source, error=str(exc))
+                logger.error(
+                    "Transcript incomplete; remains pending", source=source, error=str(exc)
+                )
         return totals
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group(required=True)
-    selection.add_argument("--file", nargs="+", type=Path, dest="files", help="Extract these transcript files")
-    selection.add_argument("--pending", action="store_true", help="Extract pending database source paths")
-    selection.add_argument("--migrate-source-identity", action="store_true",
-                           help="Explicit schema migration; quiescent database and backup required; no attribution backfill")
+    selection.add_argument(
+        "--file", nargs="+", type=Path, dest="files", help="Extract these transcript files"
+    )
+    selection.add_argument(
+        "--pending", action="store_true", help="Extract pending database source paths"
+    )
+    selection.add_argument(
+        "--migrate-source-identity",
+        action="store_true",
+        help="Explicit schema migration; quiescent database and backup required; no attribution backfill",
+    )
     parser.add_argument("--base-path", type=Path, help="Resolve pending relative source paths here")
     return parser
 
@@ -128,8 +149,13 @@ async def _run(args: argparse.Namespace) -> int:
         if args.pending:
             stats = dict(await pipeline.process_from_database(base_path=args.base_path))
         else:
-            stats = {"total": len(args.files), "processed": 0, "failed": 0,
-                     "total_entities": 0, "total_relationships": 0}
+            stats = {
+                "total": len(args.files),
+                "processed": 0,
+                "failed": 0,
+                "total_entities": 0,
+                "total_relationships": 0,
+            }
             for path in args.files:
                 try:
                     result = await pipeline.process_transcript_file(path)

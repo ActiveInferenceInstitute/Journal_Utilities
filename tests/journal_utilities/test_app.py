@@ -37,16 +37,24 @@ def ollama_transport(monkeypatch):
     def handle(request):
         state["requests"].append(request)
         if state["fail"]:
-            raise httpx.ConnectError("Connection to http://private-host:11434 failed", request=request)
+            raise httpx.ConnectError(
+                "Connection to http://private-host:11434 failed", request=request
+            )
         if request.url.path == "/api/tags":
             return httpx.Response(200, json={"models": [{"name": chat_engine.OLLAMA_MODEL}]})
         assert request.url.path == "/api/chat"
         payload = json.loads(request.content)
         if payload["stream"]:
-            return httpx.Response(200, content=(
-                json.dumps({"message": {"content": "Bounded answer"}, "done": False}) + "\n" +
-                json.dumps({"done": True}) + "\n"
-            ), headers={"content-type": "application/x-ndjson"})
+            return httpx.Response(
+                200,
+                content=(
+                    json.dumps({"message": {"content": "Bounded answer"}, "done": False})
+                    + "\n"
+                    + json.dumps({"done": True})
+                    + "\n"
+                ),
+                headers={"content-type": "application/x-ndjson"},
+            )
         return httpx.Response(200, json={"message": {"content": "Bounded answer"}})
 
     def client(*args, **kwargs):
@@ -445,18 +453,30 @@ CHAT_ROUTES = ["/api/chat", "/api/chat/stream", "/api/chat/clear"]
 
 
 @pytest.mark.parametrize("route", CHAT_ROUTES)
-@pytest.mark.parametrize("body,status", [
-    (b"null", 422), (b"[]", 422), (b"3", 422), (b'"text"', 422), (b"true", 422),
-    (b"{broken", 400), (b"\xff", 400),
-    (b'{"message": null}', 422), (b'{"message": []}', 422), (b'{"message": 1}', 422),
-    (b'{"message": "hello", "session_id": null}', 422),
-    (b'{"message": "hello", "session_id": {}}', 422),
-    (b'{"message": "hello", "session_id": 1}', 422),
-    (b'{"message": "hello", "use_rag": "false"}', 422),
-    (b'{"message": "hello", "use_rag": 0}', 422),
-    (b'{"message": "hello", "use_rag": null}', 422),
-])
-def test_invalid_chat_payloads_are_client_errors(test_client, ollama_transport, route, body, status):
+@pytest.mark.parametrize(
+    "body,status",
+    [
+        (b"null", 422),
+        (b"[]", 422),
+        (b"3", 422),
+        (b'"text"', 422),
+        (b"true", 422),
+        (b"{broken", 400),
+        (b"\xff", 400),
+        (b'{"message": null}', 422),
+        (b'{"message": []}', 422),
+        (b'{"message": 1}', 422),
+        (b'{"message": "hello", "session_id": null}', 422),
+        (b'{"message": "hello", "session_id": {}}', 422),
+        (b'{"message": "hello", "session_id": 1}', 422),
+        (b'{"message": "hello", "use_rag": "false"}', 422),
+        (b'{"message": "hello", "use_rag": 0}', 422),
+        (b'{"message": "hello", "use_rag": null}', 422),
+    ],
+)
+def test_invalid_chat_payloads_are_client_errors(
+    test_client, ollama_transport, route, body, status
+):
     response = test_client.post(route, content=body, headers={"content-type": "application/json"})
     assert response.status_code == status
     assert ollama_transport["requests"] == []
@@ -464,11 +484,19 @@ def test_invalid_chat_payloads_are_client_errors(test_client, ollama_transport, 
 
 @pytest.mark.parametrize("route", ["/api/chat", "/api/chat/stream"])
 def test_exact_field_bounds_allow_escaped_unicode(test_client, route):
-    payload = {"message": "😀" * MAX_MESSAGE_LENGTH, "session_id": "s" * MAX_SESSION_LENGTH, "use_rag": False}
-    response = test_client.post(route, content=json.dumps(payload), headers={"content-type": "application/json"})
+    payload = {
+        "message": "😀" * MAX_MESSAGE_LENGTH,
+        "session_id": "s" * MAX_SESSION_LENGTH,
+        "use_rag": False,
+    }
+    response = test_client.post(
+        route, content=json.dumps(payload), headers={"content-type": "application/json"}
+    )
     assert response.status_code == 200
     if route.endswith("/stream"):
-        events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+        events = [
+            json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")
+        ]
         assert [event["type"] for event in events] == ["context", "token", "done"]
         assert events[1]["content"] == "Bounded answer"
     else:
@@ -476,8 +504,12 @@ def test_exact_field_bounds_allow_escaped_unicode(test_client, route):
 
 
 @pytest.mark.parametrize("route", CHAT_ROUTES)
-@pytest.mark.parametrize("field,length", [("message", MAX_MESSAGE_LENGTH + 1), ("session_id", MAX_SESSION_LENGTH + 1)])
-def test_field_limit_plus_one_never_reaches_transport(test_client, ollama_transport, route, field, length):
+@pytest.mark.parametrize(
+    "field,length", [("message", MAX_MESSAGE_LENGTH + 1), ("session_id", MAX_SESSION_LENGTH + 1)]
+)
+def test_field_limit_plus_one_never_reaches_transport(
+    test_client, ollama_transport, route, field, length
+):
     payload = {"message": "hello", "session_id": "session", "use_rag": False, field: "x" * length}
     assert test_client.post(route, json=payload).status_code == 413
     assert ollama_transport["requests"] == []
@@ -497,17 +529,30 @@ async def test_streamed_body_stops_before_full_accumulation(
     sample_data_dir, ollama_transport, route, declared, single_chunk
 ):
     app = create_app(data_dir=sample_data_dir)
-    chunks = ([b"x" * (MAX_CHAT_BODY_BYTES + 1), b"unread"] if single_chunk else
-              [b"x" * (MAX_CHAT_BODY_BYTES - 5), b"0123456789", b"unread"])
+    chunks = (
+        [b"x" * (MAX_CHAT_BODY_BYTES + 1), b"unread"]
+        if single_chunk
+        else [b"x" * (MAX_CHAT_BODY_BYTES - 5), b"0123456789", b"unread"]
+    )
     consumed = 0
     sent = []
     headers = [(b"content-type", b"application/json")]
     if declared is not None:
         headers.append((b"content-length", declared))
-    scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"},
-             "http_version": "1.1", "method": "POST", "scheme": "http", "path": route,
-             "raw_path": route.encode(), "root_path": "", "query_string": b"", "headers": headers,
-             "server": ("test", 80), "client": ("test", 1234)}
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.4"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": route,
+        "raw_path": route.encode(),
+        "root_path": "",
+        "query_string": b"",
+        "headers": headers,
+        "server": ("test", 80),
+        "client": ("test", 1234),
+    }
 
     async def receive():
         nonlocal consumed
@@ -521,16 +566,29 @@ async def test_streamed_body_stops_before_full_accumulation(
         sent.append(message)
 
     await app(scope, receive, send)
-    assert next(message["status"] for message in sent if message["type"] == "http.response.start") == 413
-    assert consumed == (0 if declared == str(MAX_CHAT_BODY_BYTES + 1).encode() else (1 if single_chunk else 2))
+    assert (
+        next(message["status"] for message in sent if message["type"] == "http.response.start")
+        == 413
+    )
+    assert consumed == (
+        0 if declared == str(MAX_CHAT_BODY_BYTES + 1).encode() else (1 if single_chunk else 2)
+    )
     assert ollama_transport["requests"] == []
 
 
-@pytest.mark.parametrize("url", [
-    "/api/videos?offset=-1", "/api/videos?limit=0", "/api/videos?limit=-1", "/api/videos?limit=201",
-    "/api/videos?q=active&offset=-1", "/api/search?q=active&limit=0",
-    "/api/search?q=active&limit=-1", "/api/search?q=active&limit=101",
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/api/videos?offset=-1",
+        "/api/videos?limit=0",
+        "/api/videos?limit=-1",
+        "/api/videos?limit=201",
+        "/api/videos?q=active&offset=-1",
+        "/api/search?q=active&limit=0",
+        "/api/search?q=active&limit=-1",
+        "/api/search?q=active&limit=101",
+    ],
+)
 def test_pagination_rejects_invalid_bounds(test_client, url):
     assert test_client.get(url).status_code == 422
 
@@ -545,10 +603,24 @@ def test_pagination_upper_bounds_remain_valid(test_client):
 
 
 def test_clear_removes_history_without_provider_call(test_client, ollama_transport):
-    assert test_client.post("/api/chat", json={"session_id": "s", "message": "first", "use_rag": False}).status_code == 200
+    assert (
+        test_client.post(
+            "/api/chat", json={"session_id": "s", "message": "first", "use_rag": False}
+        ).status_code
+        == 200
+    )
     before = len(ollama_transport["requests"])
-    assert test_client.post("/api/chat/clear", json={"session_id": "s"}).json() == {"status": "cleared"}
+    assert test_client.post("/api/chat/clear", json={"session_id": "s"}).json() == {
+        "status": "cleared"
+    }
     assert len(ollama_transport["requests"]) == before
-    assert test_client.post("/api/chat", json={"session_id": "s", "message": "second", "use_rag": False}).status_code == 200
+    assert (
+        test_client.post(
+            "/api/chat", json={"session_id": "s", "message": "second", "use_rag": False}
+        ).status_code
+        == 200
+    )
     payload = json.loads(ollama_transport["requests"][-1].content)
-    assert [message["content"] for message in payload["messages"] if message["role"] == "user"] == ["second"]
+    assert [message["content"] for message in payload["messages"] if message["role"] == "user"] == [
+        "second"
+    ]

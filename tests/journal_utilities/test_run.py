@@ -397,8 +397,12 @@ def test_required_export_failure_stops_pipeline(export_corpus, monkeypatch, comm
     cfg, transcripts, _ = export_corpus
     (transcripts / "empty.txt").write_text("", encoding="utf-8")
     monkeypatch.setattr(run, "cmd_download", lambda *_: 0)
-    monkeypatch.setattr(run, "cmd_test", lambda *_: pytest.fail("tests started after failed export"))
-    monkeypatch.setattr(run, "cmd_serve", lambda *_: pytest.fail("server started after failed export"))
+    monkeypatch.setattr(
+        run, "cmd_test", lambda *_: pytest.fail("tests started after failed export")
+    )
+    monkeypatch.setattr(
+        run, "cmd_serve", lambda *_: pytest.fail("server started after failed export")
+    )
     assert getattr(run, command)(cfg, argparse.Namespace()) == 1
 
 
@@ -410,9 +414,15 @@ def test_occupied_listener_survives_serve_refusal(config, monkeypatch):
 
     uvicorn = pytest.importorskip("uvicorn")
     pytest.importorskip("fastapi")
-    monkeypatch.setattr(run.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("listener discovery attempted"))
-    monkeypatch.setattr(run.os, "kill", lambda *_args, **_kwargs: pytest.fail("listener termination attempted"))
-    monkeypatch.setattr(uvicorn, "run", lambda *_args, **_kwargs: pytest.fail("occupied server started"))
+    monkeypatch.setattr(
+        run.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("listener discovery attempted")
+    )
+    monkeypatch.setattr(
+        run.os, "kill", lambda *_args, **_kwargs: pytest.fail("listener termination attempted")
+    )
+    monkeypatch.setattr(
+        uvicorn, "run", lambda *_args, **_kwargs: pytest.fail("occupied server started")
+    )
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
@@ -440,9 +450,12 @@ def test_serve_loads_configured_corpus(config, tmp_path, monkeypatch, absolute):
 
     chosen = tmp_path / "chosen"
     chosen.mkdir()
-    (chosen / "channel_videos.json").write_text(json.dumps({"videos": [
-        {"id": "chosen12345", "title": "Chosen corpus", "upload_date": "20250101"}
-    ]}), encoding="utf-8")
+    (chosen / "channel_videos.json").write_text(
+        json.dumps(
+            {"videos": [{"id": "chosen12345", "title": "Chosen corpus", "upload_date": "20250101"}]}
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(run, "PROJECT_ROOT", tmp_path)
     config.set("general", "data_dir", str(chosen) if absolute else "chosen")
     config.set("interface", "port", "0")

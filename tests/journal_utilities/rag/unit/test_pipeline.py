@@ -43,7 +43,9 @@ def mock_db_client():
     """Mock database client."""
     mock = AsyncMock()
     mock.get_or_create_transcript.return_value = "transcript:test-001"
-    mock.create_entity.side_effect = lambda entity: f"entity:{entity.source}-{entity.type}-{entity.name}"
+    mock.create_entity.side_effect = lambda entity: (
+        f"entity:{entity.source}-{entity.type}-{entity.name}"
+    )
     mock.create_relationship.return_value = "relates:test-001"
     mock.update_transcript_status.return_value = None
     return mock
@@ -83,10 +85,12 @@ async def test_process_transcript_with_file(
     # Verify database interactions
     mock_db_client.get_or_create_transcript.assert_called_once()
     assert mock_db_client.create_entity.call_count > 0
-    mock_db_client.update_transcript_status.assert_has_awaits([
-        call("transcript:test-001", processed=False),
-        call("transcript:test-001", processed=True),
-    ])
+    mock_db_client.update_transcript_status.assert_has_awaits(
+        [
+            call("transcript:test-001", processed=False),
+            call("transcript:test-001", processed=True),
+        ]
+    )
 
     # Verify extractor was called
     mock_extractor.extract_core_entities.assert_called_once_with(sample_transcript.content)
@@ -175,10 +179,12 @@ async def test_process_transcript_updates_transcript_status(
     await pipeline.process_transcript(sample_transcript)
 
     # Verify transcript was marked as processed
-    mock_db_client.update_transcript_status.assert_has_awaits([
-        call("transcript:test-001", processed=False),
-        call("transcript:test-001", processed=True),
-    ])
+    mock_db_client.update_transcript_status.assert_has_awaits(
+        [
+            call("transcript:test-001", processed=False),
+            call("transcript:test-001", processed=True),
+        ]
+    )
 
 
 @pytest.mark.asyncio
@@ -241,13 +247,16 @@ async def test_process_transcript_converts_entities_correctly(
     assert "Karl Friston" in entity_names
 
 
-@pytest.mark.parametrize("filename, expected", [
-    ("talk_2025-10-30.txt", datetime(2025, 10, 30)),
-    ("talk_2025.10.30", datetime(2025, 10, 30)),
-    ("talk_2025.10.30.txt", datetime(2025, 10, 30)),
-    ("undated.txt", datetime.min),
-    ("talk_2025-02-30.txt", datetime.min),
-])
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("talk_2025-10-30.txt", datetime(2025, 10, 30)),
+        ("talk_2025.10.30", datetime(2025, 10, 30)),
+        ("talk_2025.10.30.txt", datetime(2025, 10, 30)),
+        ("undated.txt", datetime.min),
+        ("talk_2025-02-30.txt", datetime.min),
+    ],
+)
 async def test_file_and_pending_loaders_share_date_and_source(
     tmp_path, filename, expected, mock_db_client, mock_extractor
 ):
@@ -285,14 +294,28 @@ async def test_required_missing_endpoint_is_not_discarded(
 async def test_source_and_type_choose_returned_endpoint_ids(
     sample_transcript, mock_db_client, mock_extractor
 ):
-    from journal_utilities.rag.models import Citation, CitationType, Concept, ConceptCategory, Researcher, ResearcherRole
+    from journal_utilities.rag.models import (
+        Citation,
+        CitationType,
+        Concept,
+        ConceptCategory,
+        Researcher,
+        ResearcherRole,
+    )
 
     mock_extractor.extract_core_entities.return_value = CoreEntities(
-        concepts=[Concept(name="Same", definition="Concept", category=ConceptCategory.THEORETICAL,
-                          related_concepts=["Same"])],
+        concepts=[
+            Concept(
+                name="Same",
+                definition="Concept",
+                category=ConceptCategory.THEORETICAL,
+                related_concepts=["Same"],
+            )
+        ],
         researchers=[Researcher(name="Same", role=ResearcherRole.SPEAKER)],
         citations=[Citation(title="Same", type=CitationType.PAPER, authors=["Same"])],
-        technical_terms=[], key_insights=["One"],
+        technical_terms=[],
+        key_insights=["One"],
     )
     pipeline = JournalRAGPipeline()
     pipeline.db_client = mock_db_client
@@ -307,7 +330,9 @@ async def test_source_and_type_choose_returned_endpoint_ids(
             "source_id": f"entity:{edge.transcript_source}-{edge.source_type}-{edge.source}",
             "target_id": f"entity:{edge.transcript_source}-{edge.target_type}-{edge.target}",
         }
-    assert {invocation.args[0].source for invocation in mock_db_client.create_entity.await_args_list} == {"a.txt", "b.txt"}
+    assert {
+        invocation.args[0].source for invocation in mock_db_client.create_entity.await_args_list
+    } == {"a.txt", "b.txt"}
 
 
 @pytest.fixture
@@ -343,7 +368,9 @@ def test_cli_pending_edge_failure_returns_failure_and_disconnects(tmp_path, cli_
     db.create_relationship.side_effect = RuntimeError("edge write failed")
     assert main(["--pending", "--base-path", str(tmp_path)]) == 1
     extractor.extract_core_entities.assert_called_once_with("Pending")
-    assert db.update_transcript_status.await_args_list == [call("transcript:test-001", processed=False)]
+    assert db.update_transcript_status.await_args_list == [
+        call("transcript:test-001", processed=False)
+    ]
     db.disconnect.assert_awaited_once()
 
 
@@ -372,13 +399,20 @@ def test_cli_explicit_migration_does_not_extract(cli_boundaries):
     db.disconnect.assert_awaited_once()
 
 
-async def test_no_required_relationships_can_complete(sample_transcript, mock_db_client, mock_extractor):
+async def test_no_required_relationships_can_complete(
+    sample_transcript, mock_db_client, mock_extractor
+):
     mock_extractor.extract_core_entities.return_value = CoreEntities(
         concepts=[], researchers=[], citations=[], technical_terms=[], key_insights=["An insight"]
     )
     pipeline = JournalRAGPipeline()
     pipeline.db_client = mock_db_client
     pipeline.extractor = mock_extractor
-    assert await pipeline.process_transcript(sample_transcript) == {"entities": 1, "relationships": 0}
+    assert await pipeline.process_transcript(sample_transcript) == {
+        "entities": 1,
+        "relationships": 0,
+    }
     mock_db_client.create_relationship.assert_not_awaited()
-    assert mock_db_client.update_transcript_status.await_args == call("transcript:test-001", processed=True)
+    assert mock_db_client.update_transcript_status.await_args == call(
+        "transcript:test-001", processed=True
+    )

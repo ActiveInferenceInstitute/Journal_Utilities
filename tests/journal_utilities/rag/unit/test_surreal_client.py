@@ -20,8 +20,6 @@ def connected():
     return client, client.db
 
 
-
-
 async def test_ambiguous_entity_does_not_select_first_or_write(connected):
     client, db = connected
     db.query.return_value = [[{"id": "entity:a"}, {"id": "entity:b"}]]
@@ -32,9 +30,17 @@ async def test_ambiguous_entity_does_not_select_first_or_write(connected):
 
 async def test_cross_source_or_wrong_type_endpoints_are_refused(connected):
     client, db = connected
-    db.query.return_value = [[{"id": "entity:wrong", "source": "other.txt", "type": "concept", "name": "Shared"}]]
-    edge = Relationship(transcript_source="a.txt", source="Shared", target="Target",
-                        source_type="concept", target_type="concept", relationship_type="related_to")
+    db.query.return_value = [
+        [{"id": "entity:wrong", "source": "other.txt", "type": "concept", "name": "Shared"}]
+    ]
+    edge = Relationship(
+        transcript_source="a.txt",
+        source="Shared",
+        target="Target",
+        source_type="concept",
+        target_type="concept",
+        relationship_type="related_to",
+    )
     with pytest.raises(ValueError, match="trusted source/type/name"):
         await client.create_relationship(edge, source_id="entity:wrong", target_id="entity:target")
     db.relate.assert_not_awaited()
@@ -49,7 +55,12 @@ async def test_transcript_update_does_not_replace_date_or_identity(connected):
     transcript = Transcript(title="Updated", date=datetime.min, source="a.txt", content="New text")
     assert await client.get_or_create_transcript(transcript) == "transcript:old"
     changes = db.query.await_args.args[1]["changes"]
-    assert changes == {"title": "Updated", "content": "New text", "metadata": {}, "processed": False}
+    assert changes == {
+        "title": "Updated",
+        "content": "New text",
+        "metadata": {},
+        "processed": False,
+    }
     db.create.assert_not_awaited()
 
 
@@ -80,19 +91,49 @@ async def test_legacy_schema_requires_explicit_admission(monkeypatch):
     assert client.db is None
 
 
-@pytest.mark.parametrize("entities,edges", [
-    ([{"id": "entity:a", "name": "Shared", "type": "concept", "source": "a.txt", "metadata": {"source": "b.txt"}}], []),
-    ([{"id": "entity:a", "name": "Shared", "type": "concept", "source": "a.txt"},
-      {"id": "entity:b", "name": "Shared", "type": "concept", "source": "a.txt"}], []),
-    ([{"id": "entity:a", "name": "Shared", "type": "concept", "source": "a.txt"}],
-     [{"id": "relates:x", "source": "b.txt", "in": "entity:a", "out": "entity:a", "relationship_type": "related_to"}]),
-])
+@pytest.mark.parametrize(
+    "entities,edges",
+    [
+        (
+            [
+                {
+                    "id": "entity:a",
+                    "name": "Shared",
+                    "type": "concept",
+                    "source": "a.txt",
+                    "metadata": {"source": "b.txt"},
+                }
+            ],
+            [],
+        ),
+        (
+            [
+                {"id": "entity:a", "name": "Shared", "type": "concept", "source": "a.txt"},
+                {"id": "entity:b", "name": "Shared", "type": "concept", "source": "a.txt"},
+            ],
+            [],
+        ),
+        (
+            [{"id": "entity:a", "name": "Shared", "type": "concept", "source": "a.txt"}],
+            [
+                {
+                    "id": "relates:x",
+                    "source": "b.txt",
+                    "in": "entity:a",
+                    "out": "entity:a",
+                    "relationship_type": "related_to",
+                }
+            ],
+        ),
+    ],
+)
 async def test_explicit_migration_refuses_ambiguous_attribution(monkeypatch, entities, edges):
     db = AsyncMock()
     db.query.side_effect = [
         [{"tables": {"entity": "SCHEMAFULL", "relates": "RELATION"}}],
         [{"indexes": {"entity_name_type": "name,type UNIQUE"}}],
-        [entities], [edges],
+        [entities],
+        [edges],
     ]
     monkeypatch.setattr("journal_utilities.rag.graph.surreal_client.AsyncSurreal", lambda _: db)
     client = SurrealDBClient()
@@ -105,8 +146,16 @@ async def test_explicit_migration_refuses_ambiguous_attribution(monkeypatch, ent
 
 async def test_metadata_only_source_stays_unknown(connected):
     client, db = connected
-    db.query.return_value = [[{"id": "entity:old", "name": "Insight 1", "type": "key_insight",
-                               "metadata": {"source": "untrusted-claim.txt"}}]]
+    db.query.return_value = [
+        [
+            {
+                "id": "entity:old",
+                "name": "Insight 1",
+                "type": "key_insight",
+                "metadata": {"source": "untrusted-claim.txt"},
+            }
+        ]
+    ]
     summary = await client._admit_migration({"entity": "SCHEMAFULL"})
     assert summary["legacy_entities_preserved"] == summary["unknown_source_entities"] == 1
     db.create.assert_not_awaited()

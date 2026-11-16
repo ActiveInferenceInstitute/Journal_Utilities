@@ -11,6 +11,7 @@ from surrealdb import AsyncSurreal, AsyncSurrealConnection, RecordID, StringReco
 from journal_utilities.rag.models import Entity, Relationship, Transcript
 from journal_utilities.rag.settings import settings
 
+
 def _first_statement(result: object) -> object:
     """The installed SDK 3.x returns one entry per statement."""
     if not isinstance(result, list) or len(result) != 1:
@@ -107,7 +108,9 @@ class SurrealDBClient:
         tables = info["tables"]
         indexes = {}
         if "entity" in tables:
-            entity_info = cast(Mapping[str, Any], _first_statement(await self.db.query("INFO FOR TABLE entity;")))
+            entity_info = cast(
+                Mapping[str, Any], _first_statement(await self.db.query("INFO FOR TABLE entity;"))
+            )
             indexes = entity_info["indexes"]
         legacy = ("entity" in tables or "relates" in tables) and (
             "entity_source_type_name" not in indexes or "entity_name_type" in indexes
@@ -119,14 +122,18 @@ class SurrealDBClient:
             )
         if migrate_source_identity:
             self.migration_summary = await self._admit_migration(tables)
-        remove_old = "REMOVE INDEX entity_name_type ON entity;" if "entity_name_type" in indexes else ""
+        remove_old = (
+            "REMOVE INDEX entity_name_type ON entity;" if "entity_name_type" in indexes else ""
+        )
         # A failed index definition must not leave a partially migrated schema.
         await self.db.query("BEGIN TRANSACTION;" + _SCHEMA + remove_old + "COMMIT TRANSACTION;")
 
     async def _admit_migration(self, tables: Mapping[str, Any]) -> dict[str, int]:
         entities = list(await self.query("SELECT * FROM entity;")) if "entity" in tables else []
         edges = list(await self.query("SELECT * FROM relates;")) if "relates" in tables else []
-        transcripts = list(await self.query("SELECT * FROM transcript;")) if "transcript" in tables else []
+        transcripts = (
+            list(await self.query("SELECT * FROM transcript;")) if "transcript" in tables else []
+        )
         by_id = {str(row["id"]): row for row in entities}
         identities: set[tuple[str | None, str, str]] = set()
         unknown = 0
@@ -147,7 +154,9 @@ class SurrealDBClient:
             for endpoint in ("in", "out"):
                 entity = by_id.get(str(row[endpoint]))
                 if entity is None or self._legacy_source(entity) != source:
-                    raise RuntimeError("Ambiguous legacy relationship attribution; migration refused")
+                    raise RuntimeError(
+                        "Ambiguous legacy relationship attribution; migration refused"
+                    )
             key = (source, str(row["in"]), str(row["out"]), row["relationship_type"])
             if key in edge_keys:
                 raise RuntimeError("Ambiguous legacy relationship identity; migration refused")
@@ -159,8 +168,12 @@ class SurrealDBClient:
                 if source in sources:
                     raise RuntimeError("Ambiguous legacy transcript source; migration refused")
                 sources.add(source)
-        return {"legacy_entities_preserved": len(entities), "unknown_source_entities": unknown,
-                "legacy_relationships_preserved": len(edges), "unknown_source_relationships": unknown_edges}
+        return {
+            "legacy_entities_preserved": len(entities),
+            "unknown_source_entities": unknown,
+            "legacy_relationships_preserved": len(edges),
+            "unknown_source_relationships": unknown_edges,
+        }
 
     @staticmethod
     def _legacy_source(row: Mapping[str, Any]) -> str | None:
@@ -186,11 +199,14 @@ class SurrealDBClient:
         return cast(Sequence[Mapping[str, Any]], rows)
 
     async def _record(self, record_id: str) -> Mapping[str, Any] | None:
-        return _single(await self.query("SELECT * FROM $id;", {"id": StringRecordId(record_id)}), record_id)
+        return _single(
+            await self.query("SELECT * FROM $id;", {"id": StringRecordId(record_id)}), record_id
+        )
 
     async def _merge(self, record_id: str, changes: Mapping[str, Any]) -> None:
         rows = await self.query(
-            "UPDATE $id MERGE $changes;", {"id": StringRecordId(record_id), "changes": dict(changes)}
+            "UPDATE $id MERGE $changes;",
+            {"id": StringRecordId(record_id), "changes": dict(changes)},
         )
         if _single(rows, record_id) is None:
             raise RuntimeError(f"Record disappeared during update: {record_id}")
@@ -200,15 +216,20 @@ class SurrealDBClient:
     ) -> Mapping[str, Any] | None:
         if not source.strip():
             raise ValueError("A trusted transcript source is required")
-        return _single(await self.query(
-            "SELECT * FROM entity WHERE source = $source AND type = $type AND name = $name;",
-            {"source": source, "type": entity_type, "name": name},
-        ), "source-qualified entity")
+        return _single(
+            await self.query(
+                "SELECT * FROM entity WHERE source = $source AND type = $type AND name = $name;",
+                {"source": source, "type": entity_type, "name": name},
+            ),
+            "source-qualified entity",
+        )
 
     async def create_entity(self, entity: Entity) -> str:
         if self.db is None:
             raise RuntimeError("Database not connected")
-        existing = await self.get_entity_by_name(entity.name, entity_type=entity.type, source=entity.source)
+        existing = await self.get_entity_by_name(
+            entity.name, entity_type=entity.type, source=entity.source
+        )
         payload: dict[str, Any] = entity.model_dump()
         if existing:
             # MERGE, not replacement: preserve identity and original creation time.
@@ -235,31 +256,50 @@ class SurrealDBClient:
         ):
             endpoint = await self._record(record_id)
             if endpoint is None or (
-                endpoint.get("source"), endpoint.get("type"), endpoint.get("name")
+                endpoint.get("source"),
+                endpoint.get("type"),
+                endpoint.get("name"),
             ) != (relationship.transcript_source, entity_type, name):
                 raise ValueError("Relationship endpoint does not match trusted source/type/name")
-        params = {"source": relationship.transcript_source, "in": StringRecordId(source_id),
-                  "out": StringRecordId(target_id), "type": relationship.relationship_type}
-        existing = _single(await self.query(
-            "SELECT * FROM relates WHERE source = $source AND in = $in AND out = $out "
-            "AND relationship_type = $type;", params
-        ), "source-qualified relationship")
-        payload: dict[str, Any] = {"source": relationship.transcript_source,
-                   "relationship_type": relationship.relationship_type,
-                   "description": relationship.description, "confidence": relationship.confidence,
-                   "context": relationship.context, "metadata": relationship.metadata}
+        params = {
+            "source": relationship.transcript_source,
+            "in": StringRecordId(source_id),
+            "out": StringRecordId(target_id),
+            "type": relationship.relationship_type,
+        }
+        existing = _single(
+            await self.query(
+                "SELECT * FROM relates WHERE source = $source AND in = $in AND out = $out "
+                "AND relationship_type = $type;",
+                params,
+            ),
+            "source-qualified relationship",
+        )
+        payload: dict[str, Any] = {
+            "source": relationship.transcript_source,
+            "relationship_type": relationship.relationship_type,
+            "description": relationship.description,
+            "confidence": relationship.confidence,
+            "context": relationship.context,
+            "metadata": relationship.metadata,
+        }
         if existing:
             edge_id = str(existing["id"])
             await self._merge(edge_id, payload)
             return edge_id
         # Deterministic record identity also prevents duplicate edges on concurrent retries.
-        key = json.dumps([relationship.transcript_source, source_id, target_id,
-                          relationship.relationship_type], ensure_ascii=False, separators=(",", ":"))
+        key = json.dumps(
+            [relationship.transcript_source, source_id, target_id, relationship.relationship_type],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
         edge = RecordID("relates", hashlib.sha256(key.encode("utf-8")).hexdigest())
         if await self._record(str(edge)) is not None:
             raise RuntimeError("Relationship identity collision; refusing to overwrite")
         payload["created_at"] = datetime.now(UTC)
-        row = await self.db.relate(StringRecordId(source_id), edge, StringRecordId(target_id), payload)
+        row = await self.db.relate(
+            StringRecordId(source_id), edge, StringRecordId(target_id), payload
+        )
         if not isinstance(row, Mapping) or "id" not in row:
             raise RuntimeError("Relationship creation returned no record")
         return str(row["id"])
@@ -268,15 +308,21 @@ class SurrealDBClient:
         if self.db is None:
             raise RuntimeError("Database not connected")
         payload = transcript.model_dump()
-        payload.update(date=_utc(transcript.date), created_at=_utc(transcript.created_at), processed=False)
+        payload.update(
+            date=_utc(transcript.date), created_at=_utc(transcript.created_at), processed=False
+        )
         row = await self.db.create("transcript", payload)
         if not isinstance(row, Mapping) or "id" not in row:
             raise RuntimeError("Transcript creation returned no record")
         return str(row["id"])
 
     async def get_transcript_by_source(self, source_path: str) -> Mapping[str, Any] | None:
-        return _single(await self.query("SELECT * FROM transcript WHERE source = $source;",
-                                       {"source": source_path}), "transcript source")
+        return _single(
+            await self.query(
+                "SELECT * FROM transcript WHERE source = $source;", {"source": source_path}
+            ),
+            "transcript source",
+        )
 
     async def get_unprocessed_transcript_paths(self) -> Sequence[str]:
         rows = await self.query("SELECT source FROM transcript WHERE processed = false;")
@@ -284,7 +330,9 @@ class SurrealDBClient:
         for row in rows:
             source = row.get("source")
             if not isinstance(source, str) or not source.strip():
-                raise RuntimeError("Pending transcript has no trusted source path; explicit review required")
+                raise RuntimeError(
+                    "Pending transcript has no trusted source path; explicit review required"
+                )
             paths.append(source)
         return paths
 
@@ -296,7 +344,14 @@ class SurrealDBClient:
         if existing:
             transcript_id = str(existing["id"])
             # Do not rewrite historical date/source/created_at on a retry.
-            await self._merge(transcript_id, {"title": transcript.title, "content": transcript.content,
-                                             "metadata": transcript.metadata, "processed": False})
+            await self._merge(
+                transcript_id,
+                {
+                    "title": transcript.title,
+                    "content": transcript.content,
+                    "metadata": transcript.metadata,
+                    "processed": False,
+                },
+            )
             return transcript_id
         return await self.create_transcript(transcript)

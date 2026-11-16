@@ -20,15 +20,25 @@ from surrealdb import AsyncSurreal, RecordID
 
 from journal_utilities.rag.graph.surreal_client import SurrealDBClient
 from journal_utilities.rag.main import JournalRAGPipeline
-from journal_utilities.rag.models import Concept, ConceptCategory, CoreEntities, Relationship, Transcript
+from journal_utilities.rag.models import (
+    Concept,
+    ConceptCategory,
+    CoreEntities,
+    Relationship,
+    Transcript,
+)
 
 
 @pytest.fixture
 async def disposable_database():
     prefix = "JOURNAL_TEST_SURREALDB_"
     required = ("URL", "NAMESPACE", "USERNAME", "PASSWORD")
-    if os.environ.get(prefix + "ALLOW_DISPOSABLE") != "1" or not all(os.environ.get(prefix + name) for name in required):
-        pytest.skip("Explicit disposable existing SurrealDB service credentials required; no DB proof")
+    if os.environ.get(prefix + "ALLOW_DISPOSABLE") != "1" or not all(
+        os.environ.get(prefix + name) for name in required
+    ):
+        pytest.skip(
+            "Explicit disposable existing SurrealDB service credentials required; no DB proof"
+        )
     options = {name.lower(): os.environ[prefix + name] for name in required}
     options["database"] = "journal_group07_test_" + uuid4().hex
     raw = AsyncSurreal(options["url"])
@@ -65,14 +75,33 @@ async def test_legacy_migration_source_identity_retry_and_dates(disposable_datab
         DEFINE FIELD metadata ON relates TYPE object;
         DEFINE FIELD created_at ON relates TYPE datetime;
     """)
-    payload = {"description": "Legacy", "confidence": 1.0, "mentions": 1, "context": [],
-               "metadata": {}, "created_at": datetime(2000, 1, 1, tzinfo=UTC)}
-    await raw.create(RecordID("entity", "legacy_insight"), dict(payload, name="Insight 1", type="key_insight"))
-    await raw.create(RecordID("entity", "legacy_concept"), dict(payload, name="Shared", type="concept"))
-    await raw.relate(RecordID("entity", "legacy_concept"), RecordID("relates", "legacy"),
-                     RecordID("entity", "legacy_insight"),
-                     {"relationship_type": "related_to", "description": "Legacy", "confidence": 1.0,
-                      "context": "", "metadata": {}, "created_at": datetime(2000, 1, 1, tzinfo=UTC)})
+    payload = {
+        "description": "Legacy",
+        "confidence": 1.0,
+        "mentions": 1,
+        "context": [],
+        "metadata": {},
+        "created_at": datetime(2000, 1, 1, tzinfo=UTC),
+    }
+    await raw.create(
+        RecordID("entity", "legacy_insight"), dict(payload, name="Insight 1", type="key_insight")
+    )
+    await raw.create(
+        RecordID("entity", "legacy_concept"), dict(payload, name="Shared", type="concept")
+    )
+    await raw.relate(
+        RecordID("entity", "legacy_concept"),
+        RecordID("relates", "legacy"),
+        RecordID("entity", "legacy_insight"),
+        {
+            "relationship_type": "related_to",
+            "description": "Legacy",
+            "confidence": 1.0,
+            "context": "",
+            "metadata": {},
+            "created_at": datetime(2000, 1, 1, tzinfo=UTC),
+        },
+    )
     legacy_entities = (await raw.query("SELECT * FROM entity ORDER BY id;"))[0]
     legacy_edges = (await raw.query("SELECT * FROM relates ORDER BY id;"))[0]
     refused = SurrealDBClient(**options)
@@ -88,10 +117,26 @@ async def test_legacy_migration_source_identity_retry_and_dates(disposable_datab
         info = (await raw.query("INFO FOR TABLE entity;"))[0]
         assert "entity_name_type" not in info["indexes"]
         assert "entity_source_type_name" in info["indexes"]
-        core = CoreEntities(concepts=[
-            Concept(name="Shared", definition="A", category=ConceptCategory.THEORETICAL, related_concepts=["Target"]),
-            Concept(name="Target", definition="B", category=ConceptCategory.THEORETICAL, related_concepts=["Shared"]),
-        ], researchers=[], citations=[], technical_terms=[], key_insights=["An insight"])
+        core = CoreEntities(
+            concepts=[
+                Concept(
+                    name="Shared",
+                    definition="A",
+                    category=ConceptCategory.THEORETICAL,
+                    related_concepts=["Target"],
+                ),
+                Concept(
+                    name="Target",
+                    definition="B",
+                    category=ConceptCategory.THEORETICAL,
+                    related_concepts=["Shared"],
+                ),
+            ],
+            researchers=[],
+            citations=[],
+            technical_terms=[],
+            key_insights=["An insight"],
+        )
         pipeline = JournalRAGPipeline()
         pipeline.db_client = client
         pipeline.extractor = MagicMock()
@@ -131,20 +176,42 @@ async def test_legacy_migration_source_identity_retry_and_dates(disposable_datab
         by_id = {str(row["id"]): row for row in entities}
         for edge in edges:
             if edge.get("source"):
-                assert by_id[str(edge["in"])]["source"] == edge["source"] == by_id[str(edge["out"])]["source"]
-        assert sorted((row for row in entities if not row.get("source")), key=lambda row: str(row["id"])) == legacy_entities
+                assert (
+                    by_id[str(edge["in"])]["source"]
+                    == edge["source"]
+                    == by_id[str(edge["out"])]["source"]
+                )
+        assert (
+            sorted(
+                (row for row in entities if not row.get("source")), key=lambda row: str(row["id"])
+            )
+            == legacy_entities
+        )
         assert [row for row in edges if not row.get("source")] == legacy_edges
-        assert {row["source"] for row in entities if row["name"] == "Insight 1" and row.get("source")} == {"a.txt", "b.txt"}
+        assert {
+            row["source"] for row in entities if row["name"] == "Insight 1" and row.get("source")
+        } == {"a.txt", "b.txt"}
         assert (await client.get_transcript_by_source("a.txt"))["processed"] is True
         assert (await client.get_transcript_by_source("b.txt"))["processed"] is True
         a_entity = await client.get_entity_by_name("Shared", entity_type="concept", source="a.txt")
         b_entity = await client.get_entity_by_name("Target", entity_type="concept", source="b.txt")
-        edge = Relationship(transcript_source="a.txt", source="Shared", source_type="concept",
-                            target="Target", target_type="concept", relationship_type="related_to")
+        edge = Relationship(
+            transcript_source="a.txt",
+            source="Shared",
+            source_type="concept",
+            target="Target",
+            target_type="concept",
+            relationship_type="related_to",
+        )
         with pytest.raises(ValueError, match="trusted source/type/name"):
-            await client.create_relationship(edge, source_id=str(a_entity["id"]), target_id=str(b_entity["id"]))
+            await client.create_relationship(
+                edge, source_id=str(a_entity["id"]), target_id=str(b_entity["id"])
+            )
         # Explicit migration must refuse contradictory claims without changing data.
-        await raw.query("UPDATE $id MERGE { metadata: { source: 'contradictory.txt' } };", {"id": a_entity["id"]})
+        await raw.query(
+            "UPDATE $id MERGE { metadata: { source: 'contradictory.txt' } };",
+            {"id": a_entity["id"]},
+        )
         snapshot = await client.query("SELECT * FROM entity ORDER BY id;")
         ambiguous = SurrealDBClient(**options)
         with pytest.raises(RuntimeError, match="Conflicting legacy source claims"):
