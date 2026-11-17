@@ -73,15 +73,14 @@ Open after this pass:
       not started because your account is locked due to a billing issue." Local
       `run.py gate` is the only evidence; unblocked by the org owner clearing the
       billing lock.
-- [ ] **GNN pin is behind the estate** — `.github/gnn-pin.json` pins
-      `Generalized_Notation_Notation` at `v5.0.3`
-      (`8f293d9ba810e6eda5c09842d9c7ed9ffa5f92c1`); seven sibling public repos (AEOS,
-      Active_Inference_Ontology, Biofirm, CEREBRUM, COGANT, active_fractal_rabbit,
-      pymcp) pin `v5.1.0` (`75c834bd8519dc7b5adc4d24f16bf393cfd1ecdf`). Bumping means
-      editing the pin and the four hand-written places that restate it (`.github/GNN.md`,
-      `.github/README.md`, `docs/RUN_GUIDE.md`, the `test.yml` comment), then re-running
-      `run.py gate gnn`. Owner: repo maintainers; nothing but the conformance arm reads
-      the pin.
+- [x] **GNN pin moved to the estate release** (2026-11-16) — `.github/gnn-pin.json`
+      now pins `Generalized_Notation_Notation` at `v5.1.0`
+      (`75c834bd8519dc7b5adc4d24f16bf393cfd1ecdf`, the tag's commit), matching the
+      sibling public importers; the four hand-written places that restate it
+      (`.github/GNN.md`, `.github/README.md`, `docs/RUN_GUIDE.md`, the `test.yml`
+      comment) moved with it. `docs/_generated/gate-arms.md` still records the
+      `v5.0.3` measurement until `uv run python run.py gate report` is re-run on a
+      networked host (its `test-full` and `gnn` arms need the network).
 - [ ] **`.git-blame-ignore-revs` still holds the placeholder** — the file says the
       formatting commit "has NOT landed yet"; it landed as `9cb2642`. Append that
       40-char SHA (confirm it is style-only first) and drop the placeholder text.

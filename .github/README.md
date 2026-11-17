@@ -10,7 +10,7 @@ is part of the Python package; it governs automation only.
 | `workflows/test.yml` | Job `gate` (`Gate (lint · format · types · tests · docs)`) runs `run.py gate lint format types test docs` after one locked sync; job `gnn-conformance` (`gnn conformance (pinned)`) runs `run.py gate gnn` without a project sync. |
 | `workflows/artifact-guard.yml` | Job `no-tracked-artifacts`: fails a push/PR that tracks generated or OS artifacts (`*.log`, `*.part`, `*.ytdl`, `.DS_Store`). |
 | `dependabot.yml` | Weekly grouped updates for GitHub Actions and `uv` Python dependencies (`cooldown` 7 days). |
-| `gnn-pin.json` | Pin document, schema `gnn-importer-pin/v1`: `ActiveInferenceInstitute/Generalized_Notation_Notation` at `v5.0.3` (`8f293d9…`). |
+| `gnn-pin.json` | Pin document, schema `gnn-importer-pin/v1`: `ActiveInferenceInstitute/Generalized_Notation_Notation` at `v5.1.0` (`75c834bd…`). |
 | `GNN.md` | What the conformance job proves (pin + parser check over every `*.gnn.md` sketch, or the pinned exemplar when the tree has none). |
 
 ## Local checks

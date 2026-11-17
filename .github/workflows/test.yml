@@ -37,8 +37,8 @@ jobs:
       - name: Run the gate arms
         run: uv run --frozen python run.py gate lint format types test docs
 
-  # GNN pin: .github/gnn-pin.json (schema gnn-importer-pin/v1, v5.0.3,
-  # 8f293d9ba810e6eda5c09842d9c7ed9ffa5f92c1). The arm installs only the pinned
+  # GNN pin: .github/gnn-pin.json (schema gnn-importer-pin/v1, v5.1.0,
+  # 75c834bd8519dc7b5adc4d24f16bf393cfd1ecdf). The arm installs only the pinned
   # parser, so this job does not sync the project environment.
   gnn-conformance:
     name: gnn conformance (pinned)

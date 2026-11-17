@@ -50,8 +50,8 @@ See [Publishing integration](workflows/publishing.md) for provenance and digests
 ## GNN arm details
 
 - Pin: [`.github/gnn-pin.json`](../.github/gnn-pin.json), schema `gnn-importer-pin/v1`,
-  `ActiveInferenceInstitute/Generalized_Notation_Notation` at `v5.0.3`
-  (`8f293d9ba810e6eda5c09842d9c7ed9ffa5f92c1`).
+  `ActiveInferenceInstitute/Generalized_Notation_Notation` at `v5.1.0`
+  (`75c834bd8519dc7b5adc4d24f16bf393cfd1ecdf`).
 - [`.github/GNN.md`](../.github/GNN.md) records what the job parses and type-checks.
 - The arm asks the check script for its install specs (`--requirements`), so the pin
   is read in exactly one place, then runs it in a throwaway `uv` environment. No
