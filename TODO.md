@@ -77,7 +77,7 @@ Open after this pass:
       now pins `Generalized_Notation_Notation` at `v5.1.0`
       (`75c834bd8519dc7b5adc4d24f16bf393cfd1ecdf`, the tag's commit), matching the
       sibling public importers; the four hand-written places that restate it
-      (`.github/GNN.md`, `.github/README.md`, `docs/RUN_GUIDE.md`, the `test.yml`
+      (`.github/GNN.md`, `.github/WORKFLOWS.md`, `docs/RUN_GUIDE.md`, the `test.yml`
       comment) moved with it. `docs/_generated/gate-arms.md` still records the
       `v5.0.3` measurement until `uv run python run.py gate report` is re-run on a
       networked host (its `test-full` and `gnn` arms need the network).
