@@ -44,7 +44,7 @@ from it.
 - [`workflows/publishing.md`](workflows/publishing.md) — member migration, canonical artifact digests and offline checks
 - [`gate-baseline.json`](gate-baseline.json) — recorded pre-gate readings that `run.py gate report` consumes
 - [`_generated/gate-arms.md`](_generated/gate-arms.md) — measured per-arm wall time (generated)
-- [`../.github/README.md`](../.github/README.md) — workflows, Dependabot, local checks
+- [`../.github/WORKFLOWS.md`](../.github/WORKFLOWS.md) — workflows, Dependabot, local checks
 - [`../.github/GNN.md`](../.github/GNN.md) — what the pinned GNN conformance job parses
 - [`../tests/README.md`](../tests/README.md) — test suite layout and categories
 - [`../scripts/README.md`](../scripts/README.md) — every CLI script
