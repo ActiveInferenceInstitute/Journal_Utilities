@@ -152,6 +152,9 @@ def test_item_page_jsonld_parses_with_video_object_and_dataset(tmp_path: Path) -
     assert vo["uploadDate"] == "2021-06-21"
     assert vo["contentUrl"] == "https://www.youtube.com/watch?v=vid0001"
     assert vo["thumbnailUrl"] == ["https://i.ytimg.com/vi/vid0001/hqdefault.jpg"]
+    assert vo["transcript"] == (
+        page_url("https://example.com/", "Series A/2021 Talk One") + "#transcript"
+    )
     clips = vo["hasPart"]
     assert len(clips) == 2
     assert clips[0]["@type"] == "Clip"
@@ -194,8 +197,14 @@ def test_item_page_head_tags_and_transcript(tmp_path: Path) -> None:
     assert "chi(translated)" not in html_doc
 
 
-def test_minimal_item_page_has_no_fabricated_fields(tmp_path: Path) -> None:
+@pytest.mark.parametrize("transcript_text", [None, " \n"], ids=["absent", "blank"])
+def test_minimal_item_page_has_no_fabricated_fields(
+    tmp_path: Path, transcript_text: str | None
+) -> None:
     journal = _make_journal(tmp_path)
+    if transcript_text is not None:
+        item = journal / "data/video/activeinferenceinstitute/Series A/2022 Talk Two"
+        (item / "transcript.txt").write_text(transcript_text, encoding="utf-8")
     plans = _plan(journal)
     doc2 = next(p for p in plans if p.item == "2022 Talk Two").html
     # No date on parts; meta date IS the recorded fallback.
@@ -205,6 +214,10 @@ def test_minimal_item_page_has_no_fabricated_fields(tmp_path: Path) -> None:
     assert "Chapters" not in doc2
     assert "Translations" not in doc2
     assert "Guests" not in doc2
+    assert 'id="transcript"' not in doc2
+    blocks = re.findall(r'application/ld\+json">(.*?)</script>', doc2, re.S)
+    nodes = {node["@type"]: node for node in map(json.loads, blocks)}
+    assert "transcript" not in nodes["VideoObject"]
     # Single-part transcript without part markers.
     doc3 = next(p for p in plans if p.item == "Seminar X").html
     assert "<p>just one paragraph</p>" in doc3

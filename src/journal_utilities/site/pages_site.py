@@ -171,7 +171,7 @@ def _video_object(
     part: dict[str, Any],
     meta: dict[str, Any],
     item_date: str | None,
-    canonical: str,
+    transcript_url: str | None,
 ) -> dict[str, Any]:
     """VideoObject JSON-LD for one part (no fabricated fields)."""
     vid = str(part.get("video_id") or "")
@@ -184,8 +184,9 @@ def _video_object(
         "embedUrl": f"https://www.youtube-nocookie.com/embed/{vid}",
         "thumbnailUrl": [f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"],
         "inLanguage": "en",
-        "transcript": f"{canonical}#transcript",
     }
+    if transcript_url:
+        obj["transcript"] = transcript_url
     if item_date:
         obj["uploadDate"] = item_date
     clips = _clips(part)
@@ -408,8 +409,9 @@ def _render_item_page(
         body.append(nav)
 
     scripts = [_ld_json_script(_dataset_node(meta, canonical))]
+    transcript_url = f"{canonical}#transcript" if transcript else None
     for part in parts:
-        scripts.append(_ld_json_script(_video_object(part, meta, item_date, canonical)))
+        scripts.append(_ld_json_script(_video_object(part, meta, item_date, transcript_url)))
 
     return (
         '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
