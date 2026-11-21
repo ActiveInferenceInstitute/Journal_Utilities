@@ -24,6 +24,7 @@ from journal_utilities.ingest.scaffold import (
     plan_scaffolds,
     write_scaffolds,
 )
+from journal_utilities.ingest.scaffold import main as scaffold_main
 
 
 @pytest.fixture()
@@ -111,6 +112,81 @@ def test_plan_scaffolds_matches_index_naming(tmp_path: Path) -> None:
     assert by_video["u1"].relative_dir.as_posix() == (
         "data/video/activeinferenceinstitute/Other/completely-unstructured-seminar-title"
     )
+
+
+def test_symposium_livestream_days_plan_distinct_year_items(tmp_path: Path) -> None:
+    videos = [
+        ChannelVideo(
+            video_id="synthetic01",
+            title="6th Applied Active Inference Symposium (Day 1, Nov 12, 2026) ~ LIVE",
+        ),
+        ChannelVideo(
+            video_id="synthetic02",
+            title="6th Applied Active Inference Symposium (Day 2, Nov 13, 2026) ~ LIVE",
+        ),
+    ]
+    plans = plan_scaffolds(videos, tmp_path)
+    parent = Path("data/video/activeinferenceinstitute/Applied Active Inference Symposium/2026")
+    assert [plan.relative_dir for plan in plans] == [parent / "Day 1", parent / "Day 2"]
+    assert [plan.metadata["item"] for plan in plans] == ["Day 1", "Day 2"]
+    assert all(plan.metadata["series"] == "Applied Active Inference Symposium" for plan in plans)
+
+
+def test_public_playlist_fallback_is_exact_and_keeps_title_classification(tmp_path: Path) -> None:
+    symposium = "6th Applied Active Inference Symposium"
+    geo = "GEO-INFER: Geospatial Active Inference"
+    evidence = {
+        "privacy_status": "public",
+        "upload_status": "processed",
+        "broadcast_status": "none",
+    }
+    videos = [
+        ChannelVideo("synthetic01", "An example talk", playlist_titles=[symposium], **evidence),
+        ChannelVideo("synthetic02", "An example talk", playlist_titles=[symposium], **evidence),
+        ChannelVideo("synthetic03", "A geospatial talk", playlist_titles=[geo], **evidence),
+        ChannelVideo(
+            "synthetic04", "ActInf GuestStream #141.1 ~ Talk", playlist_titles=[geo], **evidence
+        ),
+        ChannelVideo("synthetic05", "Ambiguous talk", playlist_titles=[geo, symposium], **evidence),
+        ChannelVideo(
+            "synthetic06", "Nearby title", playlist_titles=[f"{symposium} clips"], **evidence
+        ),
+        ChannelVideo("synthetic07", "Unverified talk", playlist_titles=[geo]),
+    ]
+    plans = plan_scaffolds(videos, tmp_path)
+    prefix = Path("data/video/activeinferenceinstitute")
+    assert [plan.relative_dir.relative_to(prefix).as_posix() for plan in plans] == [
+        "Applied Active Inference Symposium/2026/an-example-talk-synthetic01",
+        "Applied Active Inference Symposium/2026/an-example-talk-synthetic02",
+        "Projects/GEO-INFER/a-geospatial-talk-synthetic03",
+        "GuestStream/GuestStream_141",
+        "Other/ambiguous-talk",
+        "Other/nearby-title",
+        "Other/unverified-talk",
+    ]
+    assert plans[2].metadata["series"] == "Projects"
+    assert plans[2].metadata["category"] == "Projects/GEO-INFER"
+
+
+def test_scaffold_cli_consumes_playlist_evidence_as_typed_list(tmp_path: Path, capsys) -> None:
+    worklist = tmp_path / "worklist.json"
+    entry = {
+        "video_id": "synthetic01",
+        "title": "A mapping talk",
+        "privacy_status": "public",
+        "upload_status": "processed",
+        "broadcast_status": "none",
+        "playlist_titles": ["GEO-INFER: Geospatial Active Inference"],
+    }
+    worklist.write_text(json.dumps({"new_videos": [entry]}), encoding="utf-8")
+    flags = ["--journal", str(tmp_path), "--worklist", str(worklist)]
+    assert scaffold_main(flags) == 0
+    assert "Projects/GEO-INFER/a-mapping-talk-synthetic01" in capsys.readouterr().out
+    assert not (tmp_path / "data").exists()
+    entry["playlist_titles"] = "GEO-INFER: Geospatial Active Inference"
+    worklist.write_text(json.dumps({"new_videos": [entry]}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="2"):
+        scaffold_main(flags)
 
 
 def test_no_scaffold_ever_lands_in_flattened_textbook_dir(tmp_path: Path) -> None:

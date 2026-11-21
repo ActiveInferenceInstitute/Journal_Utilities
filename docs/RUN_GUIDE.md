@@ -19,7 +19,7 @@ FastAPI/uvicorn, fpdf2) and the dev tools. The Apple-Silicon and GPU transcripti
 extras are imported lazily and are not needed for any arm:
 
 ```bash
-uv sync --frozen --extra rag --extra interface --extra export --dev
+uv sync --frozen --extra rag --extra interface --extra export --extra youtube --dev
 ```
 
 `run.py gate` resolves the interpreter itself: the project `.venv` when it exists,

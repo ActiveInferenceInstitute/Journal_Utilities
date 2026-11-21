@@ -47,6 +47,10 @@ interface = [
 export = [
     "fpdf2>=2.8.0",
 ]
+youtube = [
+    "google-api-python-client>=2.169.0",
+    "google-auth-oauthlib>=1.2.0",
+]
 
 [project.scripts]
 journal-ui = "journal_utilities.interface.app:main"

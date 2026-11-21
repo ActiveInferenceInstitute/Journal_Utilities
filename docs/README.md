@@ -21,6 +21,7 @@ module- and workflow-level guides.
 | [`translation.md`](translation.md) | Hosted OpenRouter subtitle translation (`scripts/translate_subtitles_openrouter.py`). |
 | [`configuration.md`](configuration.md) | `config.ini` + `.env` reference. |
 | [`youtube.md`](youtube.md) | YouTube integration — enumeration (`youtube/channel.py`), guarded write path, quota rules, OAuth ownership. |
+| [`youtube-captions.md`](youtube-captions.md) | English WhisperX caption preparation and reviewed uploads. |
 | [`m3-ingest.md`](m3-ingest.md) | Weekly channel enumeration / scaffold / reconciliation (M3). |
 | [`privacy.md`](privacy.md) | What the pipeline processes, what it never does, API usage, retention. |
 

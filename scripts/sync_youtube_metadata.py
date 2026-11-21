@@ -25,11 +25,12 @@ import json
 import logging
 import os
 import sys
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from journal_utilities.ingest.enumerate import DEFAULT_CHANNEL_ID
 
 if TYPE_CHECKING:
     from journal_utilities.youtube.client import QuotaLedger, VideoSnippet, YouTubeClient
@@ -88,6 +89,8 @@ class SyncContext:
     chapter_gen: Any | None = None
     api_fetched: set[str] = field(default_factory=set)
     backup_dir: Path = BACKUP_DIR
+    channel_id: str = DEFAULT_CHANNEL_ID
+    failures: int = 0
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -120,12 +123,16 @@ def backup_snippet(video_id: str, snippet: VideoSnippet, backup_dir: Path = BACK
     """Write the pre-update backup required by Rule 1; returns the file path."""
     from dataclasses import asdict
 
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
     target = backup_dir / video_id
     target.mkdir(parents=True, exist_ok=True)
     path = target / f"{timestamp}.json"
     payload = {"backed_up_at": timestamp, "video_id": video_id, "snippet": asdict(snippet)}
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        json.dump(payload, stream, indent=2, ensure_ascii=False)
+        stream.flush()
+        os.fsync(stream.fileno())
     logger.info("Backed up live snippet for %s -> %s", video_id, path)
     return path
 
@@ -164,7 +171,6 @@ def build_target_description(
 def sync_videos(ctx: SyncContext, targets: list[dict]) -> int:
     """Run the pull-assemble-push loop. Returns the number of live updates."""
     from journal_utilities.youtube.client import QuotaBudgetExceededError
-    from journal_utilities.youtube.metadata_formatter import CHAPTERS_MARKER_END
 
     updated_count = 0
     for i, v in enumerate(targets, 1):
@@ -193,11 +199,21 @@ def sync_videos(ctx: SyncContext, targets: list[dict]) -> int:
                 len(targets),
                 vid,
             )
+            ctx.failures += 1
+            continue
+        if ctx.apply and (
+            live_snippet.video_id != vid
+            or live_snippet.channel_id != ctx.channel_id
+            or not live_snippet.title
+            or not live_snippet.category_id
+        ):
+            logger.error("%s: could not verify the live snippet and its channel", vid)
+            ctx.failures += 1
             continue
         ctx.api_fetched.add(vid)
 
-        raw_title = live_snippet.title or v.get("title", "")
-        existing_tags = live_snippet.tags or v.get("tags", [])
+        raw_title = live_snippet.title
+        existing_tags = live_snippet.tags
         raw_desc = live_snippet.description
 
         # ------------------------------------------------ 2. CHAPTERS/TRANSCRIPT
@@ -219,15 +235,7 @@ def sync_videos(ctx: SyncContext, targets: list[dict]) -> int:
         new_description = build_target_description(vid, raw_desc, ctx)
         new_tags = derive_video_tags(raw_title, existing_tags)
 
-        from journal_utilities.youtube.client import VideoSnippet
-
-        snippet = VideoSnippet(
-            video_id=vid,
-            title=raw_title,
-            description=new_description,
-            category_id=live_snippet.category_id,
-            tags=new_tags,
-        )
+        snippet = replace(live_snippet, description=new_description, tags=new_tags)
 
         logger.info(
             "[%d/%d] %s — chapters: %d, tags: %d, mode: %s",
@@ -280,22 +288,24 @@ def sync_videos(ctx: SyncContext, targets: list[dict]) -> int:
         result = ctx.client.update_video_snippet(snippet, dry_run=False)
         if not result.success:
             logger.error("Failed update for %s: %s", vid, result.error)
+            ctx.failures += 1
             continue
         updated_count += 1
 
         # ------------------------------------------------------ 4. VERIFY
         if ctx.verify:
-            time.sleep(5)
             logger.info("Verifying update on YouTube for %s...", vid)
             try:
                 ctx.ledger.spend("videos.list")
                 verified = ctx.client.get_video_snippet(vid)
-                if verified and CHAPTERS_MARKER_END in verified.description:
+                if verified == snippet:
                     logger.info("Verification PASSED for %s", vid)
                 else:
                     logger.warning("Verification check inconclusive for %s", vid)
+                    ctx.failures += 1
             except Exception as exc:
                 logger.warning("Verification read failed for %s: %s", vid, exc)
+                ctx.failures += 1
 
     return updated_count
 
@@ -304,16 +314,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Synchronize YouTube video metadata")
     parser.add_argument("--video-id", type=str, help="Single YouTube video ID to process")
     parser.add_argument("--limit", type=int, default=0, help="Max videos to process (0 = all)")
-    parser.add_argument(
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument(
         "--apply",
         action="store_true",
         help="Apply updates live (default is dry-run; writes also require a "
         "Data API-fetched snippet in this run)",
     )
-    parser.add_argument(
+    modes.add_argument(
         "--dry-run",
         action="store_true",
-        help="Deprecated no-op: dry-run is already the default (kept for older callers)",
+        help="Preview updates (the default)",
     )
     parser.add_argument(
         "--journal", type=Path, default=DEFAULT_JOURNAL, help="ActiveInferenceJournal checkout"
@@ -323,6 +334,7 @@ def main() -> int:
         action="store_true",
         help="Re-fetch metadata from YouTube after update to verify",
     )
+    parser.add_argument("--channel-id", default=DEFAULT_CHANNEL_ID)
     parser.add_argument(
         "--quota-budget",
         type=int,
@@ -340,7 +352,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from journal_utilities.youtube.client import QuotaLedger, YouTubeClient
+    from journal_utilities.youtube.client import (
+        QuotaBudgetExceededError,
+        QuotaLedger,
+        YouTubeClient,
+        YouTubeReadError,
+    )
 
     client = YouTubeClient(
         api_key=os.environ.get("YOUTUBE_API_KEY"),
@@ -349,6 +366,11 @@ def main() -> int:
     )
     item_index = load_journal_index(args.journal)
     ledger = QuotaLedger(budget=args.quota_budget)
+    if args.apply:
+        try:
+            client.require_channel(args.channel_id, ledger=ledger)
+        except (YouTubeReadError, QuotaBudgetExceededError) as exc:
+            parser.exit(2, f"{parser.prog}: {exc}\n")
 
     videos: list[dict] = []
     if CHANNEL_VIDEOS.is_file():
@@ -383,6 +405,7 @@ def main() -> int:
         apply=args.apply,
         verify=args.verify and args.apply,
         chapter_gen=chapter_gen,
+        channel_id=args.channel_id,
     )
     updated = sync_videos(ctx, targets)
     logger.info(
@@ -391,7 +414,7 @@ def main() -> int:
         ledger.spent,
         ledger.budget,
     )
-    return 0
+    return int(ctx.failures > 0)
 
 
 if __name__ == "__main__":

@@ -39,6 +39,11 @@ logger = logging.getLogger(__name__)
 
 #: Journal source root, relative to the journal checkout (A003 conventions).
 SRC_PREFIX = Path("data/video/activeinferenceinstitute")
+_PLAYLIST_CATEGORIES = {
+    "6th Applied Active Inference Symposium": "Applied Active Inference Symposium/2026",
+    "GEO-INFER: Geospatial Active Inference": "Projects/GEO-INFER",
+}
+_YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 
 
 def _part_slug(title: str, max_length: int = 60) -> str:
@@ -110,6 +115,21 @@ def _infer_series_and_item(
     category, series, episode = _classify(video)
     if series:
         return category or "Other", series, category, episode
+    if (
+        category is None
+        and video.privacy_status == "public"
+        and video.upload_status == "processed"
+        and video.broadcast_status == "none"
+        and _YOUTUBE_ID.fullmatch(video.video_id)
+    ):
+        destinations = {
+            _PLAYLIST_CATEGORIES[title]
+            for title in video.playlist_titles
+            if title in _PLAYLIST_CATEGORIES
+        }
+        if len(destinations) == 1:
+            destination = destinations.pop()
+            return destination, f"{_part_slug(video.title)}-{video.video_id}", destination, episode
     return "Other", _part_slug(video.title), category, episode
 
 
@@ -266,19 +286,27 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"Cannot read worklist JSON: {exc}") from exc
 
-    new_videos = [
-        ChannelVideo(
-            video_id=str(entry["video_id"]),
-            title=str(entry.get("title") or ""),
-            published_at=str(entry.get("published_at") or ""),
-            duration_seconds=entry.get("duration_seconds"),
-            privacy_status=str(entry.get("privacy_status") or ""),
-            upload_status=str(entry.get("upload_status") or ""),
-            broadcast_status=str(entry.get("broadcast_status") or ""),
+    new_videos = []
+    for entry in worklist.get("new_videos", []):
+        if not isinstance(entry, dict) or not entry.get("video_id"):
+            continue
+        playlists = entry.get("playlist_titles", [])
+        if not isinstance(playlists, list) or any(
+            not isinstance(title, str) or not title.strip() for title in playlists
+        ):
+            parser.error("worklist playlist_titles must be a list of nonempty strings")
+        new_videos.append(
+            ChannelVideo(
+                video_id=str(entry["video_id"]),
+                title=str(entry.get("title") or ""),
+                published_at=str(entry.get("published_at") or ""),
+                duration_seconds=entry.get("duration_seconds"),
+                privacy_status=str(entry.get("privacy_status") or ""),
+                upload_status=str(entry.get("upload_status") or ""),
+                broadcast_status=str(entry.get("broadcast_status") or ""),
+                playlist_titles=playlists,
+            )
         )
-        for entry in worklist.get("new_videos", [])
-        if isinstance(entry, dict) and entry.get("video_id")
-    ]
     plans = plan_scaffolds(new_videos, args.journal, skip_existing=args.skip_existing)
     report = write_scaffolds(plans, dry_run=args.dry_run)
     for plan in plans:
