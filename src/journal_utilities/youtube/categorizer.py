@@ -47,6 +47,10 @@ YOUTUBE_TITLE_PATTERNS = {
     "symposium_2021": r"Prof\. Karl Friston ~ Applied Active Inference Symposium",
     "symposium_2022": r"2nd Applied Active Inference Symposium",
     "symposium_ordinal": r"(\d+)(?:st|nd|rd|th) Applied Active Inference Symposium \(Part (\d+)",
+    "symposium_day": (
+        r"\b\d+(?:st|nd|rd|th) Applied Active Inference Symposium "
+        r"\(Day (?P<day>[1-9]\d*), [A-Za-z]+ \d{1,2}, (?P<year>20\d{2})\)"
+    ),
     "bookstream": r"(Active Inference)? ?(?:~.*~)? ?BookStream #?(\d+)\.(\d+)",
     "social_sciences": r"(Active Inference for (?:the )?Social Sciences 2023|ActInf Social Sciences 2023)",
     "physics_info": r"Physics as Information Processing",
@@ -117,6 +121,14 @@ def categorize_name(
 def _match_symposium(name: str, patterns: dict) -> EventCategory:
     """Match symposium patterns."""
     result = EventCategory()
+
+    if day_pattern := patterns.get("symposium_day"):
+        match = re.search(day_pattern, name)
+        if match:
+            return EventCategory(
+                category=f"Applied Active Inference Symposium/{match['year']}",
+                series=f"Day {match['day']}",
+            )
 
     if "symposium" in patterns:
         match = re.search(patterns["symposium"], name)

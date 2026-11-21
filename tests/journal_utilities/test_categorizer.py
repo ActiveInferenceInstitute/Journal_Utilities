@@ -146,6 +146,11 @@ class TestCategorizeName:
         assert category == "Applied Active Inference Symposium/2024"
         assert series == "part 1"
 
+    def test_symposium_day_uses_the_title_date_year(self):
+        assert categorize_name(
+            "7th Applied Active Inference Symposium (Day 3, November 8, 2030)", False
+        ) == ("Applied Active Inference Symposium/2030", "Day 3", None)
+
     # Special patterns tests
     def test_social_sciences(self):
         category, series, episode = categorize_name(
