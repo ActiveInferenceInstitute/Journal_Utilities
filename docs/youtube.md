@@ -49,10 +49,12 @@ uv run --extra youtube python scripts/youtube_channel_audit.py audit \
   --fail-on-findings
 ```
 
+The audit combines the uploads listing and the channel's public playlists.
 The worklist contains completed public videos owned by the selected channel
-and absent from the current Journal index. A malformed index or failed API
-page aborts collection before publishing the report or worklist. The report
-counts unavailable upload details without publishing their IDs. The optional
+and absent from the current Journal index. Public playlist titles provide
+series context for scaffolding. A malformed index or failed API page aborts
+collection before publishing the report or worklist. The report counts
+unavailable video details without publishing their IDs. The optional
 `--check-http` tests links to known Institute hosts and reports definitive
 404 or 410 responses. It omits link query strings and skips redirects.
 
@@ -68,6 +70,8 @@ Add `--plan /private/scratch/youtube-plan.json --classes dead,legacy,backlink`
 to the audit to prepare a JSON review. Compare each old and proposed
 description and keep the printed plan digest. Unknown destination mappings
 for obsolete links remain review findings.
+The exact obsolete 2022 Symposium Coda link points to the Institute's
+[archived 2022 proceedings](https://doi.org/10.5281/zenodo.7402485).
 
 ```bash
 uv run --extra youtube python scripts/youtube_channel_audit.py apply \
@@ -83,7 +87,7 @@ an unchanged live snippet for each proposed write. It preserves the title,
 tags, category, and metadata language. A private snapshot is written before
 each update and the live result is read back. Reruns skip descriptions
 already at the reviewed state. Store API snapshots locally and refresh or
-purge them when their operator retention window expires. See the
+purge them within 30 days. See the
 [YouTube API Developer Policies](https://developers.google.com/youtube/terms/developer-policies).
 
 ## Local checks

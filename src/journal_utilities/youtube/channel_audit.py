@@ -62,6 +62,14 @@ EXACT_LEGACY = {
     ("youtube.com", "/c/activeinference"): "https://www.youtube.com/@ActiveInference",
     ("www.youtube.com", "/c/activeinference"): "https://www.youtube.com/@ActiveInference",
 }
+DEAD_REPLACEMENTS = {
+    # The Institute's archive identifies these proceedings and both recording intervals.
+    (
+        "coda.io",
+        "/@active-inference-institute/2nd-applied-active-inference-symposium",
+    ): "https://doi.org/10.5281/zenodo.7402485",
+    ("2022symposium.activeinference.institute", ""): "https://doi.org/10.5281/zenodo.7402485",
+}
 
 
 def stable_digest(value: object) -> str:
@@ -105,6 +113,8 @@ def classify_link(value: str) -> tuple[str, str | None] | None:
     if parts is None:
         return None
     host, path = parts.hostname or "", parts.path.rstrip("/")
+    if replacement := DEAD_REPLACEMENTS.get((host, path)):
+        return "dead", None if parts.query or parts.fragment else replacement
     if host == "coda.io" and (
         path == "/@active-inference-institute" or path.startswith("/@active-inference-institute/")
     ):
@@ -240,12 +250,13 @@ def _title_date_mismatch(title: str, actual_start: object, timezone: ZoneInfo) -
     return titled.date() != start.astimezone(timezone).date()
 
 
-def _playlist_findings(
+def _audit_playlists(
     client: YouTubeClient,
     channel_id: str,
     ledger: QuotaLedger,
-) -> list[dict[str, str]]:
+) -> tuple[list[dict[str, str]], dict[str, set[str]]]:
     findings = []
+    memberships: dict[str, set[str]] = {}
     for playlist in client.list_playlists(channel_id, strict=True, ledger=ledger):
         snippet, status = playlist.get("snippet"), playlist.get("status")
         if not isinstance(snippet, dict) or not isinstance(status, dict):
@@ -263,6 +274,11 @@ def _playlist_findings(
         ):
             findings.append({"kind": "cohort_title", "playlist_id": playlist_id})
         entries = client.list_playlist_items(playlist_id, strict=True, ledger=ledger)
+        for entry in entries:
+            content = entry.get("contentDetails")
+            video_id = content.get("videoId") if isinstance(content, dict) else None
+            if isinstance(video_id, str) and VIDEO_ID.fullmatch(video_id):
+                memberships.setdefault(video_id, set()).add(title)
         titles = [str((entry.get("snippet") or {}).get("title") or "") for entry in entries]
         if any(
             title.casefold() in {"private video", "deleted video", "[private video]"}
@@ -273,7 +289,7 @@ def _playlist_findings(
             numbers = [int(match[1]) for title in titles if (match := SEQUENCE.search(title))]
             if any(before > after for before, after in zip(numbers, numbers[1:], strict=False)):
                 findings.append({"kind": "playlist_order", "playlist_id": playlist_id})
-    return findings
+    return findings, memberships
 
 
 def audit_channel(
@@ -290,16 +306,15 @@ def audit_channel(
     uploads = client.get_uploads_playlist_id(channel_id, strict=True, ledger=ledger)
     if uploads is None:
         raise YouTubeReadError("Could not verify the uploads playlist")
-    ids = list(
-        dict.fromkeys(
-            _playlist_video_ids(client.list_playlist_items(uploads, strict=True, ledger=ledger))
-        )
+    upload_ids = _playlist_video_ids(
+        client.list_playlist_items(uploads, strict=True, ledger=ledger)
     )
+    findings, memberships = _audit_playlists(client, channel_id, ledger)
+    ids = list(dict.fromkeys([*upload_ids, *memberships]))
     details = client.list_videos(
         ids, part="snippet,status,contentDetails,liveStreamingDetails", strict=True, ledger=ledger
     )
     worklist = Worklist(channel_id, index_video_count=len(index), channel_video_count=len(ids))
-    findings = _playlist_findings(client, channel_id, ledger)
     repairs = []
     link_checks: dict[str, int | None] = {}
     for item in details:
@@ -321,6 +336,7 @@ def audit_channel(
                     upload_status="processed",
                     broadcast_status="none",
                     description=live.description,
+                    playlist_titles=sorted(memberships.get(vid, ())),
                 )
             )
             findings.append({"kind": "missing_from_journal", "video_id": vid})

@@ -87,6 +87,7 @@ class ChannelVideo:
     upload_status: str = ""
     broadcast_status: str = ""
     description: str = ""
+    playlist_titles: list[str] = field(default_factory=list)
 
     @property
     def published_date(self) -> str:
@@ -127,6 +128,8 @@ class ChannelVideo:
         data["is_scheduled"] = self.is_scheduled
         data["publication_state"] = self.publication_state
         data["url"] = self.url
+        if not self.playlist_titles:
+            data.pop("playlist_titles")
         return data
 
 

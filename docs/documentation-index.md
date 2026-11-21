@@ -19,6 +19,7 @@ from it.
 ## Pipeline and module guides
 
 - [`youtube.md`](youtube.md) — enumeration (`youtube/channel.py`), guarded write path, quota, OAuth ownership
+- [`youtube-captions.md`](youtube-captions.md) — English WhisperX caption preparation and reviewed uploads
 - [`youtube_download.md`](youtube_download.md) — `yt-dlp` download engine (`download/downloader.py`)
 - [`transcription.md`](transcription.md) — local Whisper (`mlx-whisper`) and WhisperX
 - [`translation.md`](translation.md) — hosted OpenRouter subtitle translation

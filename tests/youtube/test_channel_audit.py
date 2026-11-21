@@ -23,6 +23,7 @@ PUBLIC = "BBBBBBBBBBB"
 PRIVATE = "CCCCCCCCCCC"
 SCHEDULED = "DDDDDDDDDDD"
 FOREIGN = "EEEEEEEEEEE"
+PLAYLIST_ONLY = "FFFFFFFFFFF"
 INDEX = {
     KNOWN: {
         "path": "data/video/activeinferenceinstitute/Insights/001",
@@ -64,19 +65,23 @@ class FakeChannel:
                 for vid in (KNOWN, PUBLIC, PRIVATE, SCHEDULED, FOREIGN)
             ]
         return [
-            {"snippet": {"title": "Fundamentals Session 7"}},
-            {"snippet": {"title": "Fundamentals Session 6"}},
+            {"contentDetails": {"videoId": PUBLIC}, "snippet": {"title": "Fundamentals Session 7"}},
+            {
+                "contentDetails": {"videoId": PLAYLIST_ONLY},
+                "snippet": {"title": "Fundamentals Session 6"},
+            },
             {"snippet": {"title": "Private video"}},
         ]
 
     def list_videos(self, video_ids, *, part, strict, ledger):
-        assert strict and video_ids == [KNOWN, PUBLIC, PRIVATE, SCHEDULED, FOREIGN]
+        assert strict and video_ids == [KNOWN, PUBLIC, PRIVATE, SCHEDULED, FOREIGN, PLAYLIST_ONLY]
         return [
             video(KNOWN),
             video(PUBLIC),
             video(PRIVATE, privacy="private"),
             video(SCHEDULED, broadcast="upcoming"),
             video(FOREIGN, channel_id="UCdifferent"),
+            video(PLAYLIST_ONLY),
         ]
 
     def list_playlists(self, channel_id, *, strict, ledger):
@@ -98,9 +103,10 @@ def test_audit_exports_only_completed_owned_public_backlog():
         CLASSES,
         ZoneInfo("America/Los_Angeles"),
     )
-    assert [row.video_id for row in worklist.new_videos] == [PUBLIC]
+    assert [row.video_id for row in worklist.new_videos] == [PUBLIC, PLAYLIST_ONLY]
     assert worklist.new_videos[0].publication_state == "published"
-    assert {row["video_id"] for row in repairs} == {KNOWN, PUBLIC}
+    assert [row.playlist_titles for row in worklist.new_videos] == [["Fundamentals"]] * 2
+    assert {row["video_id"] for row in repairs} == {KNOWN, PUBLIC, PLAYLIST_ONLY}
     assert {row["kind"] for row in findings} >= {
         "missing_from_journal",
         "language_mismatch",
@@ -126,6 +132,13 @@ def test_missing_legacy_mapping_is_reported_while_other_links_and_prose_are_pres
     )
     assert sum(row["kind"] == "dead" and row["repairable"] == "no" for row in findings) == 2
     assert "secret" not in json.dumps(findings)
+
+
+def test_archived_symposium_proceedings_replace_the_verified_dead_link():
+    coda = "https://coda.io/@active-inference-institute/2nd-applied-active-inference-symposium"
+    revised, findings = description_changes(f"2022 Symposium\n{coda}", None, CLASSES)
+    assert revised == "2022 Symposium\nhttps://doi.org/10.5281/zenodo.7402485"
+    assert findings == [{"kind": "dead", "link": coda, "repairable": "yes"}]
 
 
 def test_backlinks_distinguish_the_journal_item_and_transcript_availability():
