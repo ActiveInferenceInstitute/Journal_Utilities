@@ -5,7 +5,10 @@ format (whisperx blocks: video_id + segments with start/end/text/speaker) is
 exercised through tmp_path fixtures.
 """
 
+import json
 from pathlib import Path
+
+import pytest
 
 from journal_utilities.youtube.captions import (
     MAX_CUE_LINES,
@@ -57,6 +60,7 @@ def test_wrap_lines_hard_splits_oversized_word() -> None:
 
 def test_is_speaker_change_line() -> None:
     assert is_speaker_change_line("Karl Friston: Hello.")
+    assert is_speaker_change_line(">> Karl Friston: Hello.")
     assert is_speaker_change_line("Speaker 0: ok")
     assert not is_speaker_change_line("plain text")
     assert not is_speaker_change_line("")
@@ -106,7 +110,7 @@ def test_speaker_change_label_rendered_once() -> None:
     ]
     cues = build_cues(segs)
     labeled = [ln for c in cues for ln in c["lines"] if ln.endswith(": Good evening.")]
-    assert labeled == ["Speaker 0: Good evening."]
+    assert labeled == [">> Speaker 0: Good evening."]
     all_text = " ".join(ln for c in cues for ln in c["lines"])
     assert "Speaker 0:" not in all_text.replace("Speaker 0: Good evening.", "")
     assert "Speaker 1: Thanks for having me." in all_text
@@ -156,10 +160,10 @@ def _write_journal_item(tmp_path: Path, segments_by_video: dict[str, list[dict]]
     item = tmp_path / "Items" / "Series_001"
     item.mkdir(parents=True)
     (item / "transcript.json").write_text(
-        '{"not":"blocks"}' if not blocks else __import__("json").dumps(blocks), encoding="utf-8"
+        '{"not":"blocks"}' if not blocks else json.dumps(blocks), encoding="utf-8"
     )
     (item / "metadata.json").write_text(
-        __import__("json").dumps(
+        json.dumps(
             {
                 "item": "Series_001",
                 "parts": [
@@ -252,3 +256,69 @@ def test_segments_for_video_unknown_id_is_empty() -> None:
     blocks = [{"video_id": "a", "segments": [{"start": 0.0, "end": 1.0, "text": "x"}]}]
     assert segments_for_video(blocks, "zzz") == []
     assert segments_for_video(None, "a") == []
+
+
+def test_word_cues_use_sentence_boundaries_and_actual_speaker_changes() -> None:
+    segments = [
+        {
+            "start": 1.0,
+            "end": 8.0,
+            "text": "Hello there. Please continue.",
+            "speaker": "SPEAKER_00",
+            "words": [
+                {"word": "Hello", "start": 1.1, "end": 1.3},
+                {"word": "there.", "start": 1.3, "end": 2.4},
+                {"word": "Please", "start": 6.0, "end": 6.2, "speaker": "SPEAKER_01"},
+                {"word": "continue.", "start": 6.2, "end": 7.8, "speaker": "SPEAKER_01"},
+            ],
+        }
+    ]
+    cues = build_cues(segments, speakers={"SPEAKER_00": "Host", "SPEAKER_01": "Guest"})
+    assert cues == [
+        {"start": 1.1, "end": 2.4, "lines": [">> Host: Hello there."]},
+        {"start": 6.0, "end": 7.8, "lines": [">> Guest: Please continue."]},
+    ]
+
+
+def test_text_and_known_names_survive_partial_alignment_and_segment_overlap() -> None:
+    segments = [
+        {
+            "start": 0,
+            "end": 2,
+            "text": "Carl Friston welcomes Ian McGilchrist.",
+            "words": [{"word": "Carl", "start": 0.1}],
+        },
+        {"start": 1.9999, "end": 2.0001, "text": "Old Guest arrives."},
+        {"start": float("nan"), "end": 3, "text": "invalid timing"},
+    ]
+    srt = segments_to_srt(segments, name_fixes={"Old Guest": "New Guest"})
+    assert "Karl Friston welcomes Iain McGilchrist." in srt
+    assert "00:00:02,000 --> 00:00:02,001" in srt
+    assert "New Guest arrives." in srt
+    assert "invalid timing" not in srt
+    assert all(len(line) <= MAX_LINE_CHARS for line in wrap_lines("before " + "x" * 100))
+
+
+def test_whisperx_cli_requires_exact_part_and_refuses_existing_output(
+    tmp_path: Path,
+    capsys,
+    monkeypatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "scripts"))
+    from whisperx_to_srt import main
+
+    item = _write_journal_item(
+        tmp_path, {"aaaaaaa0001": _segments("Old Guest."), "aaaaaaa0002": _segments("Other part.")}
+    )
+    output = tmp_path / "review.en.srt"
+    with pytest.raises(SystemExit, match="2"):
+        main([str(item), "--out", str(output)])
+    assert not output.exists()
+    args = [str(item), "--video-id", "aaaaaaa0001", "--out", str(output)]
+    assert main([*args, "--fix", "Old Guest=New Guest"]) == 0
+    before = output.read_bytes()
+    assert b"New Guest." in before and b"Other part." not in before
+    assert "SHA-256" in capsys.readouterr().err
+    with pytest.raises(SystemExit, match="2"):
+        main(args)
+    assert output.read_bytes() == before

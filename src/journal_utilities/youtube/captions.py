@@ -1,55 +1,45 @@
-"""Derive uploadable SRT captions from journal ``transcript.json``.
-
-WhisperX ``transcript.json`` is a list of blocks, one per video part::
-
-    [{"video_id": "N5H5I6cvcrQ",
-      "segments": [{"start": 4.537, "end": 5.218, "text": " Excellent.",
-                    "speaker": "SPEAKER_00",
-                    "words": [...]}]},
-     ...]
-
-This module turns one block into a human-quality SRT for the captions.upload
-pipeline (M5):
-
-- real formatting: ``HH:MM:SS,mmm`` timestamps, cues wrapped to at most two
-  lines of 42 characters (Netflix-style), speaker labels rendered when the
-  speaker changes (mapped names from metadata ``parts[].speakers``; unmapped
-  ``SPEAKER_NN`` is humanized to ``Speaker N``);
-- long text is split across sequential cues with time proportional to the
-  character share, so no cue ever exceeds the two-line budget;
-- speaker mapping follows ``scripts/apply_speaker_names.py`` semantics
-  (``_sessNN``-suffixed video ids fall back to the base video; missing
-  mapping merges all parts).
-
-The journal is the source of truth: nothing here calls the YouTube Data API.
-"""
+"""Generate reviewable English captions from one Journal WhisperX video part."""
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 import re
+import textwrap
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-#: Maximum characters per caption line and per cue (two lines).
 MAX_LINE_CHARS = 42
 MAX_CUE_LINES = 2
+MAX_CUE_SECONDS = 7.0
+NAME_FIXES = {
+    "Carl Friston": "Karl Friston",
+    "Ian McGilchrist": "Iain McGilchrist",
+    "Darius Parvizi Wayne": "Darius Parvizi-Wayne",
+}
 
 _SPEAKER_RE = re.compile(r"SPEAKER_(\d+)$")
 _SESS_SUFFIX_RE = re.compile(r"_sess\d+$")
-# Speaker label rendered before text on a speaker change, e.g. "Karl Friston:".
-_LABEL_RE = re.compile(r"^\S[^:\n]{0,78}:")
+_LABEL_RE = re.compile(r"^(?:>> )?\S[^:\n]{0,78}:")
+_SENTENCE_END = re.compile(r"""[.!?]+["'”’\)\]]*$""")
+_ABBREVIATIONS = {"dr.", "mr.", "mrs.", "ms.", "prof.", "e.g.", "i.e.", "vs."}
+
+
+@dataclass(frozen=True)
+class _Word:
+    text: str
+    start: float
+    end: float
+    speaker: str | None
 
 
 def srt_timestamp(seconds: float) -> str:
-    """Format float seconds as SRT ``HH:MM:SS,mmm``."""
-    seconds = max(0.0, seconds)
-    # Round to milliseconds FIRST, then decompose — ms rounding can carry
-    # into the seconds/minutes digits (e.g. 59.9996 -> 00:01:00,000).
-    total_ms = round(seconds * 1000)
+    """Format seconds as SRT HH:MM:SS,mmm with carry across milliseconds."""
+    total_ms = round(max(0.0, seconds) * 1000)
     h, rem = divmod(total_ms, 3_600_000)
     m, rem = divmod(rem, 60_000)
     s, ms = divmod(rem, 1000)
@@ -57,135 +47,228 @@ def srt_timestamp(seconds: float) -> str:
 
 
 def clean_text(text: str) -> str:
-    """Normalize a segment for captions: strip BOM, collapse whitespace."""
+    """Remove BOM/NUL and collapse whitespace."""
     return " ".join(text.replace("\ufeff", "").replace("\x00", " ").split())
 
 
 def humanize_speaker(raw: str) -> str:
-    """``SPEAKER_00`` -> ``Speaker 0``; anything else passes through."""
-    match = _SPEAKER_RE.match(raw)
-    if match:
-        return f"Speaker {int(match.group(1))}"
-    return raw
+    """Use a readable default for a diarization label."""
+    match = _SPEAKER_RE.fullmatch(raw)
+    return f"Speaker {int(match.group(1))}" if match else raw
 
 
 def speaker_mapping(meta: dict[str, Any], video_id: str) -> dict[str, str]:
-    """Mapping for one video block; ``_sessNN`` ids fall back to the base video.
-
-    Mirrors ``scripts/apply_speaker_names.py``: find the part matching the
-    video id (or its base id without the session suffix); when no part matches,
-    merge every part's mapping.
-    """
+    """Use the matching video part's reviewed speaker names."""
     parts = meta.get("parts", []) if isinstance(meta, dict) else []
-    base = _SESS_SUFFIX_RE.sub("", video_id)
+    if not isinstance(parts, list):
+        return {}
+    mappings = {}
     for part in parts:
-        if isinstance(part, dict) and part.get("video_id") in (video_id, base):
-            return dict(part.get("speakers") or {})
-    merged: dict[str, str] = {}
-    for part in parts:
-        if isinstance(part, dict):
-            merged.update(part.get("speakers") or {})
-    return merged
+        if not isinstance(part, dict) or not isinstance(part.get("video_id"), str):
+            continue
+        speakers = part.get("speakers")
+        mappings[part["video_id"]] = (
+            {key: name for key, name in speakers.items() if isinstance(name, str) and name.strip()}
+            if isinstance(speakers, dict)
+            else {}
+        )
+    for candidate in (video_id, _SESS_SUFFIX_RE.sub("", video_id)):
+        if candidate in mappings:
+            return mappings[candidate]
+    return {key: name for mapping in mappings.values() for key, name in mapping.items()}
+
+
+def parse_name_fix(value: str) -> tuple[str, str]:
+    """Parse one explicit OLD=NEW correction."""
+    old, separator, new = value.partition("=")
+    old, new = clean_text(old), clean_text(new)
+    if not separator or not old or not new:
+        raise ValueError("a name correction requires nonempty OLD=NEW text")
+    return old, new
 
 
 def wrap_lines(text: str, width: int = MAX_LINE_CHARS) -> list[str]:
-    """Word-wrap text into lines of at most ``width`` characters."""
-    text = clean_text(text)
-    if not text:
+    """Word-wrap to the requested width, including oversized unbroken words."""
+    return textwrap.wrap(clean_text(text), width=width, break_on_hyphens=False)
+
+
+def _correct(text: str, pattern: re.Pattern[str], fixes: dict[str, str]) -> tuple[str, bool]:
+    positions_match = True
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal positions_match
+        original = match.group()
+        replacement = fixes[original]
+        positions_match &= len(original.split()) == len(replacement.split())
+        return replacement
+
+    return pattern.sub(replace, text), positions_match
+
+
+def _seconds(value: object) -> float | None:
+    if not isinstance(value, str | int | float) or isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)
+    except (ValueError, OverflowError):
+        return None
+    # Such a value cannot describe a video and may overflow millisecond rounding.
+    return max(0.0, parsed) if math.isfinite(parsed * 1000) else None
+
+
+def _speaker(raw: object, mapping: dict[str, str]) -> str | None:
+    if isinstance(raw, str) and raw.strip():
+        return clean_text(mapping.get(raw, humanize_speaker(raw)))
+    return None
+
+
+def _timed_words(
+    raw: object, original: str, corrected: str, speaker: str | None, mapping: dict[str, str]
+) -> list[_Word]:
+    if not isinstance(raw, list) or not raw or any(not isinstance(word, dict) for word in raw):
         return []
-    lines: list[str] = []
-    current = ""
-    for word in text.split(" "):
-        candidate = f"{current} {word}".strip()
-        if len(candidate) <= width or not current:
-            # A single word longer than ``width`` is hard-split below.
-            if not current and len(word) > width:
-                # consume the long word in width-sized chunks
-                for i in range(0, len(word), width):
-                    chunk = word[i : i + width]
-                    if i + width < len(word):
-                        lines.append(chunk)
-                    else:
-                        current = chunk
-                continue
-            current = candidate
-        else:
-            lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-    return lines
+    tokens = [clean_text(str(word.get("word", ""))) for word in raw]
+    if " ".join(tokens) != original or len(corrected.split()) != len(tokens):
+        return []
+    words = []
+    for word, token in zip(raw, corrected.split(), strict=True):
+        start = _seconds(word.get("start"))
+        end = _seconds(word.get("end"))
+        if start is None or end is None or end <= start:
+            return []
+        words.append(_Word(token, start, end, _speaker(word.get("speaker"), mapping) or speaker))
+    return words
 
 
-def build_cues(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Convert transcript segments to timed cues with speaker-change labels.
+def _prefix(speaker: str | None, previous: str | None) -> str:
+    return f">> {speaker}: " if speaker and speaker != previous else ""
 
-    Returns dicts ``{start, end, lines}`` where ``lines`` is at most
-    ``MAX_CUE_LINES`` strings of at most ``MAX_LINE_CHARS`` characters.
-    Segments whose wrapped text needs more lines are split into sequential
-    cues; the split duration is proportional to character share.
-    """
-    cues: list[dict[str, Any]] = []
-    prev_speaker: str | None = None
-    for seg in segments:
-        if not isinstance(seg, dict):
-            continue
-        text = clean_text(str(seg.get("text", "")))
-        if not text:
-            continue
-        try:
-            start = float(seg.get("start", 0.0))
-            end = float(seg.get("end", start))
-        except (TypeError, ValueError):
-            continue
-        if end <= start:
-            end = start + 1.0
-        speaker = seg.get("speaker")
-        label = None
-        if speaker and speaker != prev_speaker:
-            label = humanize_speaker(str(speaker))
-        prev_speaker = speaker
 
-        raw = f"{label}: {text}" if label else text
-        lines = wrap_lines(raw)
-        if not lines:
-            continue
-
-        for i in range(0, len(lines), MAX_CUE_LINES):
-            cue_lines = lines[i : i + MAX_CUE_LINES]
-            # proportional split of the segment duration across cue chunks
-            char_total = sum(len(ln) for ln in lines) + len(lines)
-            char_before = sum(len(ln) for ln in lines[:i]) + i
-            char_chunk = sum(len(ln) for ln in cue_lines) + len(cue_lines)
-            cue_start = start + (end - start) * (char_before / char_total)
-            cue_end = start + (end - start) * ((char_before + char_chunk) / char_total)
-            cues.append(
-                {"start": cue_start, "end": max(cue_end, cue_start + 0.1), "lines": cue_lines}
-            )
+def _split_cue(text: str, start: float, end: float, width: int) -> list[dict[str, Any]]:
+    lines = wrap_lines(text, width)
+    chunks = [lines[index : index + MAX_CUE_LINES] for index in range(0, len(lines), MAX_CUE_LINES)]
+    sizes = [sum(len(line) + 1 for line in chunk) for chunk in chunks]
+    total = sum(sizes)
+    current = start
+    used = 0
+    cues = []
+    for chunk, size in zip(chunks, sizes, strict=True):
+        used += size
+        boundary = start + (end - start) * (used / total)
+        cues.append({"start": current, "end": boundary, "lines": chunk})
+        current = boundary
     return cues
 
 
-def segments_to_srt(segments: list[dict[str, Any]]) -> str:
-    """Render timed cues as standard SRT text (LF line endings, no BOM)."""
-    cues = build_cues(segments)
-    out: list[str] = []
-    for idx, cue in enumerate(cues, 1):
-        out.append(str(idx))
-        out.append(f"{srt_timestamp(cue['start'])} --> {srt_timestamp(cue['end'])}")
-        out.extend(cue["lines"])
-        out.append("")
-    if not out:
-        return ""
-    return "\n".join(out)
+def _is_sentence_end(token: str) -> bool:
+    return (
+        bool(_SENTENCE_END.search(token))
+        and token.casefold() not in _ABBREVIATIONS
+        and not re.fullmatch(r"[A-Z]\.", token)
+    )
+
+
+def _word_cues(
+    words: list[_Word], previous: str | None, width: int
+) -> tuple[list[dict[str, Any]], str | None]:
+    group = [words[0]]
+    cues = []
+    for word in words[1:]:
+        left = group[0]
+        text = _prefix(left.speaker, previous) + " ".join(w.text for w in group)
+        if (
+            word.speaker != left.speaker
+            or _is_sentence_end(group[-1].text)
+            or word.end - left.start > MAX_CUE_SECONDS
+            or len(wrap_lines(f"{text} {word.text}", width)) > MAX_CUE_LINES
+        ):
+            cues.extend(_split_cue(text, left.start, group[-1].end, width))
+            previous = left.speaker
+            group = []
+        group.append(word)
+    left = group[0]
+    text = _prefix(left.speaker, previous) + " ".join(w.text for w in group)
+    cues.extend(_split_cue(text, left.start, group[-1].end, width))
+    return cues, left.speaker
+
+
+def build_cues(
+    segments: list[dict[str, Any]],
+    *,
+    width: int = MAX_LINE_CHARS,
+    speakers: dict[str, str] | None = None,
+    name_fixes: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Prefer aligned word boundaries, with segment timing as a text-preserving fallback."""
+    if not 1 <= width <= MAX_LINE_CHARS:
+        raise ValueError(f"caption width must be between 1 and {MAX_LINE_CHARS}")
+    fixes = {**NAME_FIXES, **(name_fixes or {})}
+    pattern = re.compile(
+        r"(?<!\w)(?:" + "|".join(map(re.escape, sorted(fixes, key=len, reverse=True))) + r")(?!\w)"
+    )
+    mapping = speakers or {}
+    mapping = {key: _correct(value, pattern, fixes)[0] for key, value in mapping.items()}
+    cues: list[dict[str, Any]] = []
+    previous: str | None = None
+    for segment in segments:
+        if not isinstance(segment, dict) or not isinstance(segment.get("text"), str):
+            continue
+        original = clean_text(segment["text"])
+        if not original:
+            continue
+        start = _seconds(segment.get("start"))
+        end = _seconds(segment.get("end"))
+        if start is None or end is None or end <= start:
+            continue
+        text, positions_match = _correct(original, pattern, fixes)
+        speaker = _speaker(segment.get("speaker"), mapping)
+        words = (
+            _timed_words(segment.get("words"), original, text, speaker, mapping)
+            if positions_match
+            else []
+        )
+        if words:
+            aligned, previous = _word_cues(words, previous, width)
+            cues.extend(aligned)
+        else:
+            cues.extend(_split_cue(_prefix(speaker, previous) + text, start, end, width))
+            previous = speaker
+
+    end_ms = 0
+    for cue in cues:
+        start_ms = max(end_ms, round(cue["start"] * 1000))
+        end_ms = max(start_ms + 1, round(cue["end"] * 1000))
+        cue["start"], cue["end"] = start_ms / 1000, end_ms / 1000
+    return cues
+
+
+def segments_to_srt(
+    segments: list[dict[str, Any]],
+    *,
+    width: int = MAX_LINE_CHARS,
+    speakers: dict[str, str] | None = None,
+    name_fixes: dict[str, str] | None = None,
+) -> str:
+    """Render sequential cues as UTF-8-compatible, LF-separated SubRip text."""
+    cues = build_cues(segments, width=width, speakers=speakers, name_fixes=name_fixes)
+    out = [
+        "\n".join(
+            [
+                str(idx),
+                f"{srt_timestamp(cue['start'])} --> {srt_timestamp(cue['end'])}",
+                *cue["lines"],
+            ]
+        )
+        for idx, cue in enumerate(cues, 1)
+    ]
+    return "\n\n".join(out) + "\n" if out else ""
 
 
 def load_blocks(transcript_path: Path) -> list[dict[str, Any]] | None:
-    """Parse a whisperx block-format ``transcript.json``; ``None`` if absent/other."""
-    if not transcript_path.is_file():
-        return None
+    """Parse the Journal's per-video WhisperX block format."""
     try:
         data = json.loads(transcript_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (ValueError, OSError):
         return None
     if not isinstance(data, list):
         return None
@@ -193,51 +276,44 @@ def load_blocks(transcript_path: Path) -> list[dict[str, Any]] | None:
 
 
 def segments_for_video(blocks: list[dict[str, Any]] | None, video_id: str) -> list[dict[str, Any]]:
-    """Segments for one part; ``_sessNN`` suffix falls back to the base id."""
-    if not blocks:
-        return []
-    base = _SESS_SUFFIX_RE.sub("", video_id)
-    for block in blocks:
-        if block.get("video_id") in (video_id, base):
-            return list(block.get("segments") or [])
+    """Select a unique exact video block or the base for a session-suffixed ID."""
+    for candidate in dict.fromkeys((video_id, _SESS_SUFFIX_RE.sub("", video_id))):
+        matches = [
+            block["segments"] for block in blocks or [] if block.get("video_id") == candidate
+        ]
+        if matches:
+            return list(matches[0]) if len(matches) == 1 else []
     return []
 
 
 def derive_srt_for_video(
-    item_dir: Path, video_id: str, *, width: int = MAX_LINE_CHARS
+    item_dir: Path,
+    video_id: str,
+    *,
+    width: int = MAX_LINE_CHARS,
+    name_fixes: dict[str, str] | None = None,
 ) -> str | None:
-    """Derive the uploadable SRT for one part of a journal item.
-
-    Reads ``item_dir/transcript.json`` and ``item_dir/metadata.json`` (for
-    speaker names). Returns ``None`` when the transcript is missing, is not
-    whisperx block format, or has no segments for ``video_id``.
-    """
-    blocks = load_blocks(item_dir / "transcript.json")
-    segments = segments_for_video(blocks, video_id)
+    """Render one Journal video part from its transcript and optional reviewer speaker map."""
+    segments = segments_for_video(load_blocks(item_dir / "transcript.json"), video_id)
     if not segments:
         return None
     meta: dict[str, Any] = {}
-    meta_path = item_dir / "metadata.json"
-    if meta_path.is_file():
-        try:
-            loaded = json.loads(meta_path.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                meta = loaded
-        except (json.JSONDecodeError, OSError):
-            logger.warning("Unreadable metadata.json in %s; speaker names skipped.", item_dir)
-    mapping = speaker_mapping(meta, video_id)
-    # Apply mapped names before rendering; humanize what stays unmapped.
-    named: list[dict[str, Any]] = []
-    for seg in segments:
-        seg = dict(seg) if isinstance(seg, dict) else {}
-        raw_speaker = seg.get("speaker")
-        if raw_speaker:
-            seg["speaker"] = mapping.get(raw_speaker, humanize_speaker(str(raw_speaker)))
-        named.append(seg)
-    _ = width  # width is fixed at MAX_LINE_CHARS for journal caption standards
-    return segments_to_srt(named)
+    try:
+        loaded = json.loads((item_dir / "metadata.json").read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            meta = loaded
+    except FileNotFoundError:
+        pass
+    except (ValueError, OSError):
+        logger.warning("Unreadable metadata.json in %s; speaker names skipped.", item_dir)
+    return (
+        segments_to_srt(
+            segments, width=width, speakers=speaker_mapping(meta, video_id), name_fixes=name_fixes
+        )
+        or None
+    )
 
 
 def is_speaker_change_line(line: str) -> bool:
-    """True when ``line`` starts with a ``Label:`` speaker-change prefix."""
+    """Return whether a caption line opens with a speaker label."""
     return bool(_LABEL_RE.match(line.strip()))
