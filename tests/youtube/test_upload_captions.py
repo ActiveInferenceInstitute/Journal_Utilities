@@ -1,17 +1,4 @@
-"""Rule-gated tests for scripts/upload_captions.py — fake client only.
-
-Proves the M5 captions write-back contract (handoff M5 + pipeline Rule 1):
-- skip-if-existing-track (captions.list gate; non-ASR or our track name);
-- SRT staging stays JU-side (data/output/captions_upload), never in the journal;
-- quota accounting (captions.list=1, captions.insert=400) against a budget;
-- --max-uploads-per-day cap counts each insert exactly once;
-- dry-run performs NO API calls and writes NOTHING;
-- backup is written BEFORE any write (insert and metadata.json update);
-- metadata.json gains captions_uploaded provenance only on --apply.
-
-The Data API is never contacted: the client is a fake with the
-``list_captions``/``insert_caption`` surface of the real YouTubeClient.
-"""
+"""Offline coverage of reviewed English caption publication."""
 
 import copy
 import json
@@ -22,57 +9,71 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-from upload_captions import (  # noqa: E402
+from captions_worklist import build_worklist
+from upload_captions import (
+    DEFAULT_MAX_UPLOADS,
     TRACK_LANGUAGE,
     TRACK_NAME,
     UploadContext,
     has_blocking_track,
+    main,
     run,
     upload_captions_for_video,
 )
 
-from journal_utilities.youtube.client import QuotaLedger  # noqa: E402
+from journal_utilities.ingest.enumerate import DEFAULT_CHANNEL_ID
+from journal_utilities.youtube.client import QuotaLedger, YouTubeReadError
 
-CAPTION_COSTS = {"captions.list": 1, "captions.insert": 400}
-
-TRACK = {
-    "kind": "youtube#caption",
-    "id": "existing-track",
-    "snippet": {"videoId": "vid1", "trackKind": "asr", "language": "en", "name": "English (auto)"},
-}
+VIDEO = "aaaaaaa0001"
+ASR = {"snippet": {"trackKind": "ASR", "language": "en", "name": "English (auto)"}}
+HUMAN = {"snippet": {"trackKind": "standard", "language": "en-US", "isDraft": True}}
 
 
 class FakeCaptionClient:
-    """Fake of YouTubeClient's caption surface; records every call."""
+    """Require strict reads and account for the same operations as the live client."""
 
-    def __init__(self, tracks_by_video: dict[str, list[dict]] | None = None):
-        self.tracks_by_video = tracks_by_video or {}
-        self.listed: list[str] = []
-        self.inserted: list[tuple[str, str, str, str]] = []
-        self.fail_for: set[str] = set()
+    def __init__(self, tracks=None):
+        self.tracks = tracks or []
+        self.listed = []
+        self.inserted = []
+        self.fail_list = False
+        self.fail_insert = False
+        self.audio = "en"
+        self.metadata = "en"
+        self.channel = DEFAULT_CHANNEL_ID
+        self.visibility = "public"
 
-    def list_captions(self, video_id: str) -> list[dict]:
-        return copy.deepcopy(self.tracks_by_video.get(video_id, []))
+    def list_videos(self, ids, part, *, strict, ledger):
+        assert strict and part == "snippet,status"
+        ledger.spend("videos.list")
+        return [
+            {
+                "id": ids[0],
+                "snippet": {
+                    "channelId": self.channel,
+                    "defaultAudioLanguage": self.audio,
+                    "defaultLanguage": self.metadata,
+                },
+                "status": {"privacyStatus": self.visibility},
+            }
+        ]
 
-    def insert_caption(
-        self, video_id: str, name: str, language: str, path: str, *, is_draft: bool = True
-    ) -> dict | None:
-        self.inserted.append((video_id, name, language, path, is_draft))
-        if video_id in self.fail_for:
-            return None
-        return {"kind": "youtube#caption", "id": f"cap-{video_id}"}
+    def list_captions(self, video_id, *, strict, ledger):
+        assert strict
+        self.listed.append(video_id)
+        ledger.spend("captions.list")
+        if self.fail_list:
+            raise YouTubeReadError("could not verify caption tracks")
+        return copy.deepcopy(self.tracks)
+
+    def insert_caption(self, video_id, name, language, path, *, is_draft):
+        assert not is_draft
+        self.inserted.append((video_id, name, language, Path(path)))
+        return None if self.fail_insert else {"id": f"cap-{video_id}"}
 
 
-@pytest.fixture
-def journal(tmp_path: Path) -> Path:
-    """A fake journal checkout root."""
-    root = tmp_path / "journal"
-    root.mkdir()
-    return root
-
-
-def make_item(journal: Path, name: str = "Insights_001", video_id: str = "vid1") -> Path:
-    item = journal / "data/video/activeinferenceinstitute/Insights" / name
+def make_row(journal, video_id=VIDEO, name="Insights_001", series="Insights"):
+    item = journal / "data/video/activeinferenceinstitute" / series / name
     item.mkdir(parents=True, exist_ok=True)
     (item / "transcript.json").write_text(
         json.dumps(
@@ -80,16 +81,11 @@ def make_item(journal: Path, name: str = "Insights_001", video_id: str = "vid1")
                 {
                     "video_id": video_id,
                     "segments": [
-                        {
-                            "start": 0.0,
-                            "end": 2.0,
-                            "text": " Hello there.",
-                            "speaker": "SPEAKER_00",
-                        },
+                        {"start": 0.0, "end": 2.0, "text": "Hello there.", "speaker": "SPEAKER_00"},
                         {
                             "start": 2.0,
                             "end": 4.0,
-                            "text": " And we're away.",
+                            "text": "And we're away.",
                             "speaker": "SPEAKER_00",
                         },
                     ],
@@ -102,242 +98,154 @@ def make_item(journal: Path, name: str = "Insights_001", video_id: str = "vid1")
         json.dumps({"item": name, "parts": [{"video_id": video_id, "speakers": {}}]}),
         encoding="utf-8",
     )
-    return item
-
-
-def make_row(journal: Path, video_id: str = "vid1", name: str = "Insights_001") -> dict[str, str]:
-    """Row matching captions_worklist output; creates the item as a side effect."""
-    item = make_item(journal, name, video_id)
     return {
-        "priority": "1",
-        "priority_name": "insights",
-        "series": "Insights",
+        "series": series,
         "item": name,
         "video_id": video_id,
-        "views": "",
-        "transcript": "true",
-        "existing_srt": "false",
-        "srt_available": "true",
+        "existing_srt": "true",
         "item_path": str(item.relative_to(journal)),
     }
 
 
-def make_ctx(client: FakeCaptionClient, journal: Path, tmp_path: Path, **kw) -> UploadContext:
-    defaults = dict(
+def make_ctx(tmp_path, client, *, budget=10_000, max_uploads=DEFAULT_MAX_UPLOADS, apply=True):
+    return UploadContext(
         client=client,
-        ledger=QuotaLedger(budget=kw.pop("budget", 10_000)),
-        journal_dir=journal,
-        apply=kw.pop("apply", True),
-        backup_dir=kw.pop("backup_dir", tmp_path / "yt_backup"),
-        staging_dir=kw.pop("staging_dir", tmp_path / "staging"),
-        max_uploads=kw.pop("max_uploads", 24),
+        ledger=QuotaLedger(budget=budget),
+        journal_dir=tmp_path / "journal",
+        apply=apply,
+        backup_dir=tmp_path / "yt_backup",
+        staging_dir=tmp_path / "staging",
+        receipts_path=tmp_path / "captions_uploaded.jsonl",
+        max_uploads=max_uploads,
     )
-    assert not kw, f"unexpected kwargs: {kw}"
-    return UploadContext(**defaults)
 
 
-# ------------------------------------------------------------ track gate
+def test_track_protection_matches_the_official_asr_enum():
+    assert not has_blocking_track([ASR])
+    assert not has_blocking_track([{"snippet": {"trackKind": "standard", "language": "fr"}}])
+    assert has_blocking_track([HUMAN])
+    assert has_blocking_track([{"snippet": {"trackKind": "ASR", "name": TRACK_NAME}}])
+    assert has_blocking_track([{"snippet": {"trackKind": "standard"}}])
+    assert has_blocking_track([{"snippet": None}])
 
 
-def test_has_blocking_track_variants() -> None:
-    assert not has_blocking_track([])
-    asr_only = [{"snippet": {"trackKind": "asr", "name": "English (auto)"}}]
-    assert not has_blocking_track(asr_only)  # ASR-only stays an upload target
-    non_asr = [{"snippet": {"trackKind": "nonAsr", "name": "English"}}]
-    assert has_blocking_track(non_asr)
-    ours = [{"snippet": {"trackKind": "asr", "name": TRACK_NAME}}]
-    assert has_blocking_track(ours)  # our track already present: no duplicates
-
-
-# ------------------------------------------------------------ skip-if-existing
-
-
-def test_skips_video_with_existing_non_asr_track(tmp_path: Path, journal: Path) -> None:
-    make_item(journal)
-    client = FakeCaptionClient({"vid1": [{"snippet": {"trackKind": "nonAsr", "name": "English"}}]})
-    ctx = make_ctx(client, journal, tmp_path)
-    result = upload_captions_for_video(ctx, make_row(journal, "vid1", "Insights_002"))
-    assert result["action"] == "skipped"
-    assert "non-ASR" in result["reason"]
-    assert client.inserted == []
-    assert ctx.ledger.spent == 1  # captions.list charged; insert never
-
-
-def test_skips_when_journal_track_already_uploaded(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    make_item(journal)
-    client = FakeCaptionClient({"vid1": [{"snippet": {"trackKind": "asr", "name": TRACK_NAME}}]})
-    ctx = make_ctx(client, journal, tmp_path)
-    result = upload_captions_for_video(ctx, make_row(journal))
-    assert result["action"] == "skipped"
-    assert "non-ASR" in result["reason"]
-
-
-def test_uploads_over_asr_only_track(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    item = make_item(journal)
-    client = FakeCaptionClient({"vid1": [dict(TRACK)]})
-    ctx = make_ctx(client, journal, tmp_path)
-    result = upload_captions_for_video(ctx, make_row(journal))
-    assert result["action"] == "uploaded"
-    assert client.inserted == [
-        ("vid1", TRACK_NAME, TRACK_LANGUAGE, str(tmp_path / "staging" / "vid1.en.srt"), False)
-    ]
-    recorded = json.loads((item / "metadata.json").read_text())["captions_uploaded"]["vid1"]
-    assert recorded["track_name"] == TRACK_NAME
-    assert recorded["language"] == TRACK_LANGUAGE
-    assert recorded["is_draft"] is False
-    assert recorded["srt_source"] == "whisperx:transcript.json"
-    assert recorded["provenance"]["generated_by"] == "scripts/upload_captions.py"
-
-
-# ----------------------------------------------------------------- quota
-
-
-def test_quota_budget_stops_batch(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    journal = tmp_path / "journal"
+@pytest.mark.parametrize(
+    ("changes", "expected", "spent"),
+    [
+        ({"visibility": "private"}, "public", 1),
+        ({"channel": "other-channel"}, "owned by", 1),
+        ({"audio": "en-US"}, "same English", 1),
+        ({"audio": ""}, "same English", 1),
+        ({"audio": "fr", "metadata": "fr"}, "same English", 1),
+        ({"tracks": [HUMAN]}, "non-ASR", 51),
+        ({"fail_list": True}, "could not verify", 51),
+    ],
+)
+def test_apply_fails_closed_on_live_preflight(tmp_path, changes, expected, spent):
     client = FakeCaptionClient()
-    ctx = make_ctx(client, journal, tmp_path, budget=401, max_uploads=5)
-    rows = [make_row(journal, f"vid{i}", f"Item_{i:02d}") for i in range(3)]
-    counts = run(ctx, rows)
-    # 401 units = exactly one list(1)+insert(400); videos 2-3 cannot afford a list.
-    assert counts["uploaded"] == 1
-    assert len(client.inserted) == 1
-    assert ctx.ledger.spent == 401
-
-
-def test_max_uploads_per_day_cap(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    client = FakeCaptionClient()
-    ctx = make_ctx(client, journal, tmp_path, max_uploads=2)
-    rows = [make_row(journal, f"vid{i}", f"Item_{i:02d}") for i in range(4)]
-    counts = run(ctx, rows)
-    # Each insert uploads exactly once: cap counts inserts, not rows.
-    assert counts["uploaded"] == 2
-    assert len(client.inserted) == 2
-    assert ctx.uploads_done == 2
-    assert counts["skipped"] == 2
-    assert "cap reached" in next(r["reason"] for r in ctx.results if r["video_id"] == "vid2")
-
-
-def test_ledger_uses_real_client_costs(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    make_item(journal)
-    ctx = make_ctx(FakeCaptionClient(), journal, tmp_path)
-    upload_captions_for_video(ctx, make_row(journal))
-    assert ctx.ledger.spent == 401  # 1 (list) + 400 (insert)
-
-
-# ---------------------------------------------------------------- dry-run
-
-
-def test_dry_run_makes_no_calls_and_writes_nothing(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    item = make_item(journal)
-    meta_before = (item / "metadata.json").read_text()
-    client = FakeCaptionClient()
-    ctx = make_ctx(client, journal, tmp_path, apply=False)
-    result = upload_captions_for_video(ctx, make_row(journal))
-    assert result["action"] == "planned"
-    assert client.inserted == []
-    assert ctx.ledger.spent == 0
-    assert (item / "metadata.json").read_text() == meta_before
-    assert not (tmp_path / "staging" / "vid1.en.srt").exists()
-
-
-def test_dry_run_never_builds_real_client(tmp_path: Path) -> None:
-    # main() constructs YouTubeClient only on --apply; a fake env without
-    # secrets must still allow a dry-run plan. Proof: dry-run path imports
-    # nothing that needs OAuth and performs no I/O beyond reading the journal.
-    from upload_captions import build_parser
-
-    args = build_parser().parse_args([])
-    assert not args.apply
-    assert args.max_uploads_per_day == 24
-    assert args.quota_budget == 10_000
-    assert args.languages == "zh-Hans,de"
-
-
-# ----------------------------------------------------------------- backups
-
-
-def test_backup_written_before_insert(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    item = make_item(journal)
-    backup_dir = tmp_path / "yt_backup"
-    client = FakeCaptionClient()
-    ctx = make_ctx(client, journal, tmp_path)
-    ctx.backup_dir = backup_dir
-
-    # Capture the backup directory at insert time to prove ordering.
-    seen: list[bool] = []
-
-    real_insert = client.insert_caption
-
-    def spy_insert(
-        video_id: str, name: str, language: str, path: str, *, is_draft: bool = True
-    ) -> dict | None:
-        backups = list(backup_dir.rglob("*-captions.json")) if backup_dir.exists() else []
-        seen.append(bool(backups))
-        return real_insert(video_id, name, language, path, is_draft=is_draft)
-
-    client.insert_caption = spy_insert  # type: ignore[method-assign]
-    upload_captions_for_video(ctx, make_row(journal))
-    assert seen == [True]
-    backup = json.loads(next(backup_dir.rglob("*-captions.json")).read_text())
-    assert backup["video_id"] == "vid1"
-    assert backup["captions_list"] == []  # captions.list snapshot
-    assert json.loads(backup["metadata_json"])["item"] == "Insights_001"
-    assert (item / "metadata.json").read_text() != backup["metadata_json"]  # record added AFTER
-
-
-def test_insert_failure_records_no_metadata(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    item = make_item(journal)
-    meta_before = (item / "metadata.json").read_text()
-    client = FakeCaptionClient({"vid1": [dict(TRACK)]})
-    client.fail_for.add("vid1")
-    ctx = make_ctx(client, journal, tmp_path)
-    result = upload_captions_for_video(ctx, make_row(journal))
-    assert result["action"] == "skipped"
-    assert "failed" in result["reason"]
-    assert (item / "metadata.json").read_text() == meta_before
-
-
-def test_derivable_gate_no_transcript_no_quota(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    client = FakeCaptionClient()
-    ctx = make_ctx(client, journal, tmp_path)
-    # Build the row FIRST, then break the transcript: make_row re-creates the
-    # item, so unlinking before would be undone.
-    row = make_row(journal)
-    (journal / row["item_path"] / "transcript.json").unlink()
+    for key, value in changes.items():
+        setattr(client, key, value)
+    ctx = make_ctx(tmp_path, client)
+    row = make_row(ctx.journal_dir)
     result = upload_captions_for_video(ctx, row)
     assert result["action"] == "skipped"
+    assert expected in result["reason"]
+    assert not client.inserted and not ctx.receipts_path.exists()
+    assert ctx.ledger.spent == spent
+
+
+def test_upload_writes_backup_receipt_and_matching_metadata(tmp_path, monkeypatch):
+    client = FakeCaptionClient([ASR])
+    ctx = make_ctx(tmp_path, client)
+    row = make_row(ctx.journal_dir)
+    metadata = ctx.journal_dir / row["item_path"] / "metadata.json"
+    original = metadata.read_text()
+    insert = client.insert_caption
+
+    def inspect_backup(*args, **kwargs):
+        backup = json.loads(next(ctx.backup_dir.rglob("*-captions.json")).read_text())
+        assert backup["metadata_json"] == original and backup["captions_list"] == [ASR]
+        assert not ctx.receipts_path.exists()
+        return insert(*args, **kwargs)
+
+    monkeypatch.setattr(client, "insert_caption", inspect_backup)
+    result = upload_captions_for_video(ctx, row)
+    assert result["action"] == "uploaded"
+    assert ctx.ledger.spent == 451
+    vid, name, language, staged = client.inserted[0]
+    receipt = json.loads(ctx.receipts_path.read_text())
+    record = json.loads(metadata.read_text())["captions_uploaded"][VIDEO]
+    assert (vid, name, language) == (VIDEO, TRACK_NAME, TRACK_LANGUAGE)
+    assert staged == ctx.staging_dir / f"{VIDEO}.{receipt['srt_sha256']}.en.srt"
+    assert ">> Speaker 0: Hello there." in staged.read_text()
+    assert not list(ctx.journal_dir.rglob("*.srt"))
+    assert receipt == {"video_id": VIDEO, **record}
+
+    # A retry after Journal metadata restoration still honors the local receipt.
+    metadata.write_text(original, encoding="utf-8")
+    assert upload_captions_for_video(ctx, row)["action"] == "skipped"
+    assert len(client.inserted) == 1
+    assert ctx.ledger.spent == 451
+
+
+def test_invalid_local_selections_do_not_spend_quota(tmp_path):
+    ctx = make_ctx(tmp_path, FakeCaptionClient())
+    row = make_row(ctx.journal_dir)
+    assert "outside" in upload_captions_for_video(ctx, {**row, "item_path": "../outside"})["reason"]
+    assert "digest" in upload_captions_for_video(ctx, {**row, "srt_sha256": "0" * 64})["reason"]
     assert ctx.ledger.spent == 0
-    assert client.inserted == []
 
 
-def test_upload_stages_srt_outside_journal(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    make_item(journal)
+def test_quota_and_attempt_cap_stop_ineligible_batch_rows(tmp_path):
+    ctx = make_ctx(tmp_path, FakeCaptionClient(), budget=451)
+    rows = [make_row(ctx.journal_dir, f"aaaaaaa{i:04d}", f"Item_{i}") for i in range(3)]
+    assert run(ctx, rows) == {"uploaded": 1, "planned": 0, "skipped": 2}
+    assert ctx.ledger.spent == 451
+    ctx = make_ctx(tmp_path, FakeCaptionClient(), max_uploads=1)
+    ctx.client.fail_insert = True
+    assert run(ctx, rows[1:]) == {"uploaded": 0, "planned": 0, "skipped": 2}
+    assert ctx.upload_attempts == 1
+    assert ctx.ledger.spent == 451
+    assert "cap reached" in ctx.results[-1]["reason"]
+
+
+def test_dry_run_default_reads_transcript_even_when_downloaded_caption_exists(tmp_path):
     client = FakeCaptionClient()
-    ctx = make_ctx(client, journal, tmp_path)
-    upload_captions_for_video(ctx, make_row(journal))
-    staged = tmp_path / "staging" / "vid1.en.srt"
-    assert staged.is_file()
-    body = staged.read_text()
-    assert "Hello there." in body
-    assert "00:00:00,000 --> 00:00:02,000" in body
-    # Journal checkout untouched: no new SRT inside it.
-    journal_srts = [p for p in journal.rglob("*.srt")]
-    assert journal_srts == []
+    ctx = make_ctx(tmp_path, client, apply=False)
+    row = make_row(ctx.journal_dir)
+    before = sorted(ctx.journal_dir.rglob("*"))
+    result = upload_captions_for_video(ctx, row)
+    assert result["action"] == "planned" and result["cue_count"] == 2
+    assert not client.listed and not client.inserted and ctx.ledger.spent == 0
+    assert sorted(ctx.journal_dir.rglob("*")) == before
+    assert not ctx.backup_dir.exists() and not ctx.receipts_path.exists()
 
 
-def test_run_counts_actions(tmp_path: Path) -> None:
-    journal = tmp_path / "journal"
-    client = FakeCaptionClient({"vid1": [{"snippet": {"trackKind": "nonAsr", "name": "English"}}]})
-    ctx = make_ctx(client, journal, tmp_path, apply=False)
-    rows = [make_row(journal, "vid1", "Item_01")]
-    counts = run(ctx, rows)
-    assert counts == {"uploaded": 0, "planned": 1, "skipped": 0}
+def test_worklist_ranks_insights_modelstream_and_matching_high_views(tmp_path):
+    root = tmp_path / "journal"
+    rows = [
+        make_row(root, "aaaaaaa0001", "Guest_001", "GuestStream"),
+        make_row(root, "aaaaaaa0002", "ModelStream_001", "ModelStream"),
+        make_row(root, "aaaaaaa0003", "Insights_001"),
+    ]
+    first = rows[0]
+    item_dir = root / first["item_path"]
+    (item_dir / "captions").mkdir()
+    (item_dir / "captions/downloaded.srt").touch()
+    index = [{**row, "path": row["item_path"], "parts": [row["video_id"]]} for row in rows]
+    index[0]["parts"].append("aaaaaaa0004")  # a different part has no transcript
+    (root / "INDEX.json").write_text(json.dumps({"items": index}), encoding="utf-8")
+    worklist = build_worklist(root, {"aaaaaaa0001": 50, "aaaaaaa0004": 100})
+    assert [row["video_id"] for row in worklist] == [
+        "aaaaaaa0003",
+        "aaaaaaa0002",
+        "aaaaaaa0001",
+        "aaaaaaa0004",
+    ]
+    assert worklist[2]["existing_srt"] == worklist[2]["srt_available"] == "true"
+    assert worklist[3]["srt_available"] == "false"
+    before = sorted(root.rglob("*"))
+    assert main(["--journal", str(root), "--limit", "1"]) == 0
+    assert sorted(root.rglob("*")) == before
+    with pytest.raises(SystemExit, match="2"):
+        main(["--journal", str(root), "--apply"])

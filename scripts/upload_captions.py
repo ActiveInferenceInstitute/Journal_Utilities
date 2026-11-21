@@ -1,43 +1,5 @@
 #!/usr/bin/env python3
-"""Upload journal-derived caption tracks (M5 captions write-back).
-
-DRY-RUN BY DEFAULT. Live writes require ``--apply`` AND OAuth
-(scope ``youtube.force-ssl``). Per pipeline Rule 1 / handoff M5:
-
-- ``captions.list`` runs before any insert; a video with an existing
-  **non-ASR** track (or a track already named ``English (Active Inference
-  Journal)``) is SKIPPED — captions.insert never overwrites or duplicates.
-- The SRT is derived from the journal's WhisperX ``transcript.json``
-  (speaker labels, two-line wrapping ≤42 chars) via
-  :mod:`journal_utilities.youtube.captions`; the journal is the source of
-  truth.
-- Track name: ``English (Active Inference Journal)``, language ``en``,
-  ``isDraft=false``.
-- Before every write (insert AND metadata.json update) a backup is written to
-  ``data/output/yt_backup/<video_id>/<timestamp>.json`` (captions.list snapshot
-  + pre-update metadata copy).
-- On success, ``captions_uploaded`` is written into the item's
-  ``metadata.json`` with full provenance (source, sha256, timestamps).
-- Quota accounting: ``captions.list`` = 1 unit, ``captions.insert`` = 400
-  units, against ``--quota-budget`` (default 10,000/day) and
-  ``--max-uploads-per-day`` (default 24 — 24 x 401 = 9,624 units, the largest
-  whole-day upload count that fits the default budget).
-
-**OAuth token owner: admin@activeinference.institute** (org account
-``ActiveInferenceInstitute``). The ``ActInfInstitute`` account is a
-personal/admin account — never authorize writes with it.
-
-Translation wave (V5, DAF decision 2026-09): upload of machine-translated
-tracks is opt-in via ``--upload-translations``; the default target-language
-set is ``zh-Hans,de`` (``--languages``). The handoff's es/pt/fr/ja list is
-DEFERRED — available via an explicit ``--languages`` override, not default.
-
-Example:
-
-    python scripts/upload_captions.py --journal ../ActiveInferenceJournal
-    python scripts/upload_captions.py --apply --max-uploads-per-day 24 \
-        --quota-budget 10000 --journal ../ActiveInferenceJournal
-"""
+"""Preview or upload reviewed English captions generated from Journal WhisperX transcripts."""
 
 from __future__ import annotations
 
@@ -47,45 +9,36 @@ import hashlib
 import json
 import logging
 import os
-import sys
+import re
+import stat
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from tempfile import NamedTemporaryFile
+from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "scripts"))  # captions_worklist import
-
-if TYPE_CHECKING:
-    from journal_utilities.youtube.client import QuotaLedger
+from journal_utilities.ingest.enumerate import DEFAULT_CHANNEL_ID
+from journal_utilities.youtube.captions import derive_srt_for_video, parse_name_fix
+from journal_utilities.youtube.client import QUOTA_COSTS, QuotaLedger
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = REPO_ROOT / "data"
 STAGING_DIR = DATA_DIR / "output/captions_upload"
 BACKUP_DIR = DATA_DIR / "output/yt_backup"
+RECEIPTS_FILE = DATA_DIR / "output/captions_uploaded.jsonl"
 DEFAULT_JOURNAL = REPO_ROOT.parent / "ActiveInferenceJournal"
 DEFAULT_BUDGET = 10_000
-DEFAULT_MAX_UPLOADS = 24
-#: Track name for the derived English caption track.
+DEFAULT_MAX_UPLOADS = 22
 TRACK_NAME = "English (Active Inference Journal)"
 TRACK_LANGUAGE = "en"
-#: DAF decision (2026-09): first translation wave is zh-Hans + de ONLY.
-DEFAULT_LANGUAGES = ("zh-Hans", "de")
-#: Deferred per the handoff; opt-in via --languages only.
-DEFERRED_LANGUAGES = ("es", "pt", "fr", "ja")
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger("upload_captions")
-
-
-def utc_now() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def backup_path(video_id: str, backup_dir: Path, stamp: str) -> Path:
-    target = backup_dir / video_id
-    target.mkdir(parents=True, exist_ok=True)
-    return target / f"{stamp}-captions.json"
+_VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
+_SHA256 = re.compile(r"[a-f0-9]{64}")
+_ENGLISH = re.compile(r"en(?:-[a-z0-9]{2,8})*", re.IGNORECASE)
+_VIDEO_COST = sum(QUOTA_COSTS[key] for key in ("videos.list", "captions.list", "captions.insert"))
+logger = logging.getLogger(__name__)
 
 
 def sha256_text(text: str) -> str:
@@ -93,297 +46,378 @@ def sha256_text(text: str) -> str:
 
 
 def has_blocking_track(tracks: list[dict[str, Any]]) -> bool:
-    """True when captions.list shows a track that must not be overwritten.
-
-    Blocks on: any non-ASR (``nonAsr``/``standard``) track, OR any track
-    already named ``TRACK_NAME`` (our own, re-uploading would duplicate).
-    ASR-only videos remain upload targets — our journal SRT is the upgrade.
-    """
-    for t in tracks:
-        snippet = t.get("snippet", {}) if isinstance(t, dict) else {}
-        kind = snippet.get("trackKind", "")
-        if kind and kind != "asr":
+    """Protect existing English tracks and any track with unverified type or language."""
+    for track in tracks:
+        snippet = track.get("snippet") if isinstance(track, dict) else None
+        if not isinstance(snippet, dict) or snippet.get("name") == TRACK_NAME:
             return True
-        if snippet.get("name") == TRACK_NAME:
+        kind, language = snippet.get("trackKind"), snippet.get("language")
+        if not isinstance(kind, str) or kind.casefold() not in {
+            "asr",
+            "forced",
+            "standard",
+            "nonasr",
+        }:
+            return True
+        if kind.casefold() != "asr" and (
+            not isinstance(language, str)
+            or not re.fullmatch(r"[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*", language)
+            or language.casefold() == "und"
+            or _ENGLISH.fullmatch(language)
+        ):
             return True
     return False
 
 
 def load_worklist_csv(path: Path) -> list[dict[str, str]]:
-    with path.open(newline="", encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
+    with path.open(newline="", encoding="utf-8") as stream:
+        return list(csv.DictReader(stream))
+
+
+def _atomic_write(path: Path, payload: bytes, mode: int = 0o600) -> None:
+    with NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", delete=False) as stream:
+        temp = Path(stream.name)
+        try:
+            os.fchmod(stream.fileno(), mode)
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+            stream.close()
+            temp.replace(path)
+        finally:
+            temp.unlink(missing_ok=True)
+
+
+def _load_receipts(path: Path) -> tuple[bytes, set[tuple[str, str]]]:
+    if not path.exists():
+        return b"", set()
+    if path.is_symlink():
+        raise ValueError("caption upload receipts must be an ordinary local file")
+    payload = path.read_bytes()
+    keys = set()
+    for line in payload.splitlines():
+        row = json.loads(line)
+        vid = row.get("video_id") if isinstance(row, dict) else None
+        sha = row.get("srt_sha256") if isinstance(row, dict) else None
+        if not isinstance(vid, str) or not _VIDEO_ID.fullmatch(vid):
+            raise ValueError("invalid video ID in caption upload receipts")
+        if not isinstance(sha, str) or not _SHA256.fullmatch(sha):
+            raise ValueError("invalid SRT digest in caption upload receipts")
+        keys.add((vid, sha))
+    return payload, keys
+
+
+@contextmanager
+def _lock_receipts(path: Path) -> Iterator[None]:
+    import fcntl
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock = path.with_suffix(".lock")
+    if lock.is_symlink():
+        raise ValueError("caption upload lock must be an ordinary local file")
+    # This lock protects the whole live run, from its first receipt read to its final write.
+    with lock.open("a", encoding="utf-8") as stream:
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ValueError("another caption upload is using these receipts") from exc
+        yield
 
 
 @dataclass
 class UploadContext:
-    """Everything the per-video caption upload needs beyond the client."""
+    """Settings and counters for one caption batch."""
 
-    client: Any  # noqa: ANN401 — duck-typed: real YouTubeClient or a fake
+    client: Any  # noqa: ANN401 — real YouTube client or a test double
     ledger: QuotaLedger
     journal_dir: Path
     apply: bool
     backup_dir: Path = BACKUP_DIR
     staging_dir: Path = STAGING_DIR
+    receipts_path: Path = RECEIPTS_FILE
     max_uploads: int = DEFAULT_MAX_UPLOADS
+    name_fixes: dict[str, str] = field(default_factory=dict)
     uploads_done: int = 0
+    upload_attempts: int = 0
     results: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _backup_before_write(
-    ctx: UploadContext, video_id: str, tracks: list[dict[str, Any]], item_dir: Path
+    ctx: UploadContext,
+    video_id: str,
+    tracks: list[dict[str, Any]],
+    meta: bytes,
 ) -> Path:
-    """Rule 1(b): snapshot live tracks + pre-update metadata before writing."""
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    path = backup_path(video_id, ctx.backup_dir, stamp)
-    meta_bytes = b""
-    meta_file = item_dir / "metadata.json"
-    if meta_file.is_file():
-        meta_bytes = meta_file.read_bytes()
-    payload = {
-        "backed_up_at": stamp,
-        "video_id": video_id,
-        "captions_list": tracks,
-        "metadata_json": meta_bytes.decode("utf-8", errors="replace"),
-    }
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    logger.info("Backed up pre-upload state for %s -> %s", video_id, path)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    target = ctx.backup_dir / video_id
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / f"{stamp}-captions.json"
+    with path.open("x", encoding="utf-8") as stream:
+        stream.write(
+            json.dumps(
+                {
+                    "backed_up_at": stamp,
+                    "video_id": video_id,
+                    "captions_list": tracks,
+                    "metadata_json": meta.decode("utf-8"),
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+        stream.flush()
+        os.fsync(stream.fileno())
     return path
 
 
-def upload_captions_for_video(ctx: UploadContext, row: dict[str, str]) -> dict[str, Any]:
-    """One video: skip-if-existing -> derive SRT -> (apply) backup+insert+record.
+def _caption_language(videos: list[dict[str, Any]], video_id: str) -> str:
+    if len(videos) != 1 or videos[0].get("id") != video_id:
+        raise ValueError("YouTube did not return the exact selected video")
+    video = videos[0]
+    snippet, status = video.get("snippet"), video.get("status")
+    if (
+        not isinstance(snippet, dict)
+        or snippet.get("channelId") != DEFAULT_CHANNEL_ID
+        or not isinstance(status, dict)
+        or status.get("privacyStatus") != "public"
+    ):
+        raise ValueError("the selected video must be public and owned by @ActiveInference")
+    audio, metadata = snippet.get("defaultAudioLanguage"), snippet.get("defaultLanguage")
+    if (
+        not isinstance(audio, str)
+        or not isinstance(metadata, str)
+        or not _ENGLISH.fullmatch(audio)
+        or audio.casefold() != metadata.casefold()
+    ):
+        raise ValueError("live video audio and metadata must have the same English language tag")
+    return audio
 
-    Dry-run performs no API calls and writes nothing; it reports the plan.
-    """
-    from journal_utilities.youtube.captions import derive_srt_for_video
 
-    vid = row["video_id"]
-    item_dir = ctx.journal_dir / row["item_path"]
-    result: dict[str, Any] = {"video_id": vid, "action": "skipped"}
+def _read_metadata(path: Path, video_id: str) -> tuple[bytes, dict[str, Any]]:
+    if path.is_symlink():
+        raise ValueError("item metadata must be an ordinary file")
+    original = path.read_bytes()
+    meta = json.loads(original.decode("utf-8"))
+    parts = meta.get("parts") if isinstance(meta, dict) else None
+    if not isinstance(parts, list) or not any(
+        isinstance(part, dict) and part.get("video_id") == video_id for part in parts
+    ):
+        raise ValueError("item metadata does not identify the selected video")
+    if not isinstance(meta.setdefault("captions_uploaded", {}), dict):
+        raise ValueError("existing caption provenance is unreadable")
+    return original, meta
 
-    # Local gates first (no quota): derivable SRT only.
-    srt = derive_srt_for_video(item_dir, vid)
-    if srt is None:
-        result["reason"] = "no whisperx transcript for this part"
-        return result
-    if row.get("existing_srt") == "true":
-        result["reason"] = "journal already carries a caption SRT (verify live before upload)"
-        return result
 
-    # Live skip gate (quota: captions.list = 1) — apply mode only.
-    tracks: list[dict[str, Any]] = []
-    if ctx.apply:
-        from journal_utilities.youtube.client import QuotaBudgetExceededError
+def _upload(
+    ctx: UploadContext,
+    video_id: str,
+    metadata_path: Path,
+    srt: str,
+    sha: str,
+) -> dict[str, Any]:
+    from journal_utilities.youtube.client import YouTubeReadError
 
-        if not ctx.ledger.can_spend("captions.list"):
-            result["reason"] = "quota budget exhausted before captions.list"
-            return result
-        try:
-            ctx.ledger.spend("captions.list")
-        except QuotaBudgetExceededError as exc:  # pragma: no cover - can_spend guards
-            result["reason"] = str(exc)
-            return result
-        tracks = ctx.client.list_captions(vid) or []
-        if has_blocking_track(tracks):
-            result["reason"] = "existing non-ASR / journal track on YouTube"
-            return result
-
-    if not ctx.apply:
-        result["action"] = "planned"
-        result["reason"] = "dry-run: would derive SRT, verify live tracks, upload"
-        result["srt_sha256"] = sha256_text(srt)
-        result["cue_count"] = srt.count("\n\n")
-        return result
-
-    from journal_utilities.youtube.client import QuotaBudgetExceededError
-
-    if ctx.uploads_done >= ctx.max_uploads:
-        result["reason"] = f"daily upload cap reached ({ctx.max_uploads})"
-        return result
-    if not ctx.ledger.can_spend("captions.insert"):
-        result["reason"] = "quota budget exhausted before captions.insert"
-        return result
-
-    # Rule 1(b): backup BEFORE the write.
-    _backup_before_write(ctx, vid, tracks, item_dir)
+    if ctx.upload_attempts >= ctx.max_uploads:
+        return {"action": "skipped", "reason": f"upload attempt cap reached ({ctx.max_uploads})"}
+    if ctx.ledger.remaining < _VIDEO_COST:
+        return {"action": "skipped", "reason": "insufficient quota for one verified upload"}
+    raw_receipts, receipt_keys = _load_receipts(ctx.receipts_path)
+    original, metadata = _read_metadata(metadata_path, video_id)
+    if (video_id, sha) in receipt_keys or video_id in metadata["captions_uploaded"]:
+        return {"action": "skipped", "reason": "the journal already records an uploaded track"}
 
     try:
-        ctx.ledger.spend("captions.insert")
-    except QuotaBudgetExceededError as exc:  # pragma: no cover - can_spend guards
-        result["reason"] = str(exc)
-        return result
+        videos = ctx.client.list_videos(
+            [video_id], part="snippet,status", strict=True, ledger=ctx.ledger
+        )
+        language = _caption_language(videos, video_id)
+        tracks = ctx.client.list_captions(video_id, strict=True, ledger=ctx.ledger)
+    except (ValueError, YouTubeReadError) as exc:
+        return {"action": "skipped", "reason": str(exc)}
+    if has_blocking_track(tracks):
+        return {"action": "skipped", "reason": "existing non-ASR or unverified caption track"}
 
-    # Stage the derived SRT JU-side (data/output) — NEVER write into the
-    # journal checkout from this script; the journal is read-only input.
-    srt_file = ctx.staging_dir / f"{vid}.en.srt"
+    backup = _backup_before_write(ctx, video_id, tracks, original)
+    srt_file = ctx.staging_dir / f"{video_id}.{sha}.en.srt"
     srt_file.parent.mkdir(parents=True, exist_ok=True)
-    srt_file.write_text(srt, encoding="utf-8")
-
+    _atomic_write(srt_file, srt.encode("utf-8"))
+    ctx.ledger.spend("captions.insert")
+    ctx.upload_attempts += 1
     response = ctx.client.insert_caption(
-        vid, TRACK_NAME, TRACK_LANGUAGE, str(srt_file), is_draft=False
+        video_id, TRACK_NAME, language, str(srt_file), is_draft=False
     )
-    if not response:
-        result["reason"] = "captions.insert failed (see client log)"
-        return result
+    track_id = response.get("id") if isinstance(response, dict) else None
+    if not isinstance(track_id, str) or not track_id:
+        return {"action": "skipped", "reason": "caption insert failed or returned no track ID"}
 
-    stamp = utc_now()
+    stamp = datetime.now(UTC).isoformat(timespec="seconds")
     record = {
         "track_name": TRACK_NAME,
-        "language": TRACK_LANGUAGE,
+        "language": language,
         "is_draft": False,
         "uploaded_at": stamp,
         "srt_source": "whisperx:transcript.json",
-        "srt_sha256": sha256_text(srt),
+        "srt_sha256": sha,
         "srt_path": str(srt_file),
-        "caption_track_id": response.get("id"),
+        "caption_track_id": track_id,
         "provenance": {
             "generated_by": "scripts/upload_captions.py",
             "generated_at": stamp,
             "journal": str(ctx.journal_dir),
-            "item": row.get("item", ""),
+            "item": metadata.get("item", ""),
+            "backup": str(backup),
         },
     }
-    _write_metadata_record(item_dir, vid, record)
-    result.update({"action": "uploaded", "caption_track_id": response.get("id")})
-    return result
-
-
-def _write_metadata_record(item_dir: Path, video_id: str, record: dict[str, Any]) -> None:
-    """Merge ``captions_uploaded[video_id]`` into the item metadata.json."""
-    meta_file = item_dir / "metadata.json"
-    meta: dict[str, Any] = {}
-    if meta_file.is_file():
-        meta = json.loads(meta_file.read_text(encoding="utf-8"))
-    uploaded = meta.setdefault("captions_uploaded", {})
-    uploaded[video_id] = record
-    meta_file.write_text(
-        json.dumps(meta, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
+    receipt = json.dumps({"video_id": video_id, **record}, ensure_ascii=False).encode("utf-8")
+    ctx.receipts_path.parent.mkdir(parents=True, exist_ok=True)
+    prefix = raw_receipts.rstrip(b"\n") + b"\n" if raw_receipts else b""
+    _atomic_write(ctx.receipts_path, prefix + receipt + b"\n")
+    if metadata_path.read_bytes() != original:
+        raise ValueError("upload recorded in receipts. Journal metadata changed during upload.")
+    metadata["captions_uploaded"][video_id] = record
+    _atomic_write(
+        metadata_path,
+        (json.dumps(metadata, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"),
+        stat.S_IMODE(metadata_path.stat().st_mode),
     )
-    logger.info("Recorded captions_uploaded[%s] in %s", video_id, meta_file)
+    return {"action": "uploaded", "caption_track_id": track_id}
+
+
+def upload_captions_for_video(ctx: UploadContext, row: dict[str, str]) -> dict[str, Any]:
+    """Plan one reviewed Journal source or apply it through the live captions safeguards."""
+    video_id, item_path = row.get("video_id", ""), row.get("item_path", "")
+    base = {"video_id": video_id, "action": "skipped"}
+    if not isinstance(video_id, str) or not _VIDEO_ID.fullmatch(video_id) or not item_path:
+        return {**base, "reason": "invalid video ID or missing Journal item path"}
+    root = ctx.journal_dir.resolve()
+    item_dir = (root / item_path).resolve()
+    if Path(item_path).is_absolute() or item_dir == root or not item_dir.is_relative_to(root):
+        return {**base, "reason": "item path is outside the Journal checkout"}
+    srt = derive_srt_for_video(item_dir, video_id, name_fixes=ctx.name_fixes)
+    if not srt:
+        return {**base, "reason": "no usable WhisperX transcript for this video"}
+    sha = sha256_text(srt)
+    if row.get("srt_sha256") and row["srt_sha256"] != sha:
+        return {**base, "reason": "generated SRT differs from the reviewed digest"}
+    if ctx.apply:
+        return {**base, **_upload(ctx, video_id, item_dir / "metadata.json", srt, sha)}
+    return {
+        **base,
+        "action": "planned",
+        "reason": f"SRT SHA-256 {sha}",
+        "srt_sha256": sha,
+        "cue_count": srt.count("\n\n") + 1,
+    }
 
 
 def run(ctx: UploadContext, rows: list[dict[str, str]]) -> dict[str, int]:
-    """Process the ranked worklist; returns action counts."""
+    """Process the selected rows, reporting duplicate video selections once."""
     counts = {"uploaded": 0, "planned": 0, "skipped": 0}
+    seen = set()
     for row in rows:
-        result = upload_captions_for_video(ctx, row)
-        action = result.pop("action", "skipped")
-        counts[action] = counts.get(action, 0) + 1
-        ctx.results.append({"video_id": row["video_id"], **result})
-        logger.info("[%s] %s: %s", action, row["video_id"], result.get("reason", "ok"))
+        video_id = row.get("video_id", "")
+        if video_id in seen:
+            result = {
+                "video_id": video_id,
+                "action": "skipped",
+                "reason": "duplicate worklist video",
+            }
+        else:
+            seen.add(video_id)
+            result = upload_captions_for_video(ctx, row)
+        action = result["action"]
+        counts[action] += 1
+        ctx.results.append(result)
+        logger.info("[%s] %s %s", action, video_id, result.get("reason", "ok"))
         if action == "uploaded":
             ctx.uploads_done += 1
     return counts
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Upload journal-derived caption tracks (dry-run by default).",
-        epilog=(
-            "OAuth token owner: admin@activeinference.institute (org "
-            "ActiveInferenceInstitute). The ActInfInstitute account is "
-            "personal/admin — do not use it for writes. Env: "
-            "YOUTUBE_CLIENT_SECRETS + YOUTUBE_TOKEN_PATH (scope "
-            "youtube.force-ssl); an API key alone cannot upload captions."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--journal", type=Path, default=DEFAULT_JOURNAL, help="Journal checkout")
+    parser.add_argument("--apply", action="store_true", help="Upload selected worklist rows")
     parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="Upload live (default dry-run: no API calls, no writes)",
+        "--worklist", type=Path, help="Reviewed caption CSV (required with --apply)"
     )
     parser.add_argument(
-        "--quota-budget",
-        type=int,
-        default=DEFAULT_BUDGET,
-        help="Daily quota units this run may spend (captions.insert=400, captions.list=1)",
+        "--quota-budget", type=int, default=DEFAULT_BUDGET, help="Quota units per run"
     )
     parser.add_argument(
         "--max-uploads-per-day",
         type=int,
         default=DEFAULT_MAX_UPLOADS,
-        help="Cap on captions.insert calls per run (default 24: 24x401=9,624 units <= 10,000)",
+        help="Cap caption insert attempts in this run",
     )
+    parser.add_argument("--limit", type=int, default=0, help="Maximum rows to examine (0 is all)")
+    parser.add_argument("--fix", action="append", default=[], help="Repeatable OLD=NEW name fix")
+    parser.add_argument("--backup-dir", type=Path, default=BACKUP_DIR, help="Pre-upload backups")
     parser.add_argument(
-        "--worklist",
-        type=Path,
-        default=None,
-        help="Pre-ranked CSV from captions_worklist.py (default: rank from INDEX.json live)",
-    )
-    parser.add_argument(
-        "--limit", type=int, default=0, help="Max worklist rows to evaluate (0 = all)"
-    )
-    parser.add_argument(
-        "--languages",
-        default=",".join(DEFAULT_LANGUAGES),
-        help=(
-            "Target-language set for the translation wave. DEFAULT (DAF 2026-09): "
-            f"{','.join(DEFAULT_LANGUAGES)} only. Deferred (handoff es/pt/fr/ja): "
-            f"{','.join(DEFERRED_LANGUAGES)} — opt-in via explicit --languages."
-        ),
-    )
-    parser.add_argument(
-        "--upload-translations",
-        action="store_true",
-        help="Also upload machine-translated tracks for --languages (opt-in; V5 wave)",
-    )
-    parser.add_argument(
-        "--backup-dir", type=Path, default=BACKUP_DIR, help="Rule-1 backup directory"
+        "--receipts", type=Path, default=RECEIPTS_FILE, help="JSONL upload receipts"
     )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    from captions_worklist import build_worklist, load_views_map
 
-    from captions_worklist import build_worklist, load_views_map, resolve_journal_dir, write_csv
-
-    from journal_utilities.youtube.client import QuotaLedger
-
-    ledger = QuotaLedger(budget=args.quota_budget)
-    client: Any | None = None  # noqa: ANN401
-    if args.apply:
-        from journal_utilities.youtube.client import YouTubeClient
-
-        client = YouTubeClient(
-            api_key=os.environ.get("YOUTUBE_API_KEY"),
-            client_secrets_path=os.environ.get("YOUTUBE_CLIENT_SECRETS"),
-            token_path=os.environ.get("YOUTUBE_TOKEN_PATH"),
-        )
-    else:
-        logger.info("Dry-run: no API client will be built; no writes will occur.")
-
-    journal_dir = resolve_journal_dir(args.journal)
-    if args.worklist and args.worklist.is_file():
-        rows = load_worklist_csv(args.worklist)
-    else:
-        rows = build_worklist(journal_dir, load_views_map(DATA_DIR / "output/channel_videos.json"))
-        rows = [{k: str(v) for k, v in r.items()} for r in rows]
-        write_csv(rows, DATA_DIR / "output/captions_worklist.csv")
-    if args.limit > 0:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.limit < 0 or args.quota_budget < 1 or args.max_uploads_per_day < 1:
+        parser.error("limit must be nonnegative and quota and upload caps must be positive")
+    if args.apply and args.worklist is None:
+        parser.error("--apply requires an explicit reviewed --worklist")
+    if args.worklist is not None and not args.worklist.is_file():
+        parser.error("--worklist must name an existing CSV")
+    if not (args.journal / "INDEX.json").is_file():
+        parser.error("--journal must name the exact checkout containing INDEX.json")
+    try:
+        fixes = dict(parse_name_fix(value) for value in args.fix)
+    except ValueError as exc:
+        parser.error(str(exc))
+    rows = (
+        load_worklist_csv(args.worklist)
+        if args.worklist
+        else build_worklist(args.journal, load_views_map(DATA_DIR / "output/channel_videos.json"))
+    )
+    if args.limit:
         rows = rows[: args.limit]
-
     ctx = UploadContext(
-        client=client,
-        ledger=ledger,
-        journal_dir=journal_dir,
+        client=None,
+        ledger=QuotaLedger(budget=args.quota_budget),
+        journal_dir=args.journal,
         apply=args.apply,
         backup_dir=args.backup_dir,
+        receipts_path=args.receipts,
         max_uploads=args.max_uploads_per_day,
+        name_fixes=fixes,
     )
-    counts = run(ctx, rows)
+
+    try:
+        if args.apply:
+            from journal_utilities.youtube.client import YouTubeClient
+
+            with _lock_receipts(args.receipts):
+                _load_receipts(args.receipts)
+                ctx.client = YouTubeClient(
+                    client_secrets_path=os.environ.get("YOUTUBE_CLIENT_SECRETS"),
+                    token_path=os.environ.get("YOUTUBE_TOKEN_PATH"),
+                )
+                ctx.client.require_channel(DEFAULT_CHANNEL_ID, ledger=ctx.ledger)
+                counts = run(ctx, rows)
+        else:
+            counts = run(ctx, rows)
+    except (OSError, ValueError, RuntimeError) as exc:
+        logger.error("Caption run stopped. %s", exc)
+        return 1
     logger.info(
-        "Done: %s | quota spent %d/%d units | uploads %d/%d",
-        counts,
-        ledger.spent,
-        ledger.budget,
-        ctx.uploads_done,
-        ctx.max_uploads,
+        "Caption results %s. Quota used %d/%d.", counts, ctx.ledger.spent, ctx.ledger.budget
     )
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    raise SystemExit(main())

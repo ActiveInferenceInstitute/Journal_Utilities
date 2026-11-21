@@ -1,24 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only captions worklist: rank videos for the M5 upload pilot.
+"""Rank English caption candidates from Journal transcripts and known view counts.
 
-Priority order from the pipeline handoff (M5, week 3+):
-
-1. **Insights** — the named pilot series.
-2. **Top by views** — videos with view data (from the Data API manifest when
-   available; falls back to 0 with a ``views=unknown`` marker).
-3. **Fundamentals 2026** — Fundamentals of Active Inference sessions
-   (TextbookGroup/Namjoshi2026 items, handoff M5 "Fundamentals 2026: optional
-   9/28 dual-track").
-4. **Rest** — everything else by series then item.
-
-Emits a CSV worklist with one row per video part:
-
-    priority,series,item,video_id,transcript,existing_srt,srt_available,item_path
-
-Read-only: no file is written outside ``--out``; nothing is uploaded, no API
-call is made. The upload script (``upload_captions.py``) consumes this CSV and
-re-verifies every row against the live channel (skip-if-existing-track) before
-any write.
+The CSV is a review artifact. Live channel and track checks belong to the
+separate caption upload command.
 """
 
 from __future__ import annotations
@@ -28,164 +12,117 @@ import csv
 import json
 import logging
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Any
 
+from journal_utilities.youtube.captions import load_blocks, segments_for_video
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _default_journal() -> Path:
-    """Locate the sibling ActiveInferenceJournal checkout.
-
-    The documented layout is ``../ActiveInferenceJournal``; nested worktree
-    checkouts (e.g. ``worktrees/<repo>/<branch>``) put the sibling higher,
-    so walk up a bounded number of levels before giving up.
-    """
-    for parent in REPO_ROOT.parents[:3]:
-        candidate = parent / "ActiveInferenceJournal"
-        if candidate.is_dir():
-            return candidate
-    return REPO_ROOT.parent / "ActiveInferenceJournal"
-
-
-DEFAULT_JOURNAL = _default_journal()
+DEFAULT_JOURNAL = REPO_ROOT.parent / "ActiveInferenceJournal"
 CHANNEL_VIDEOS = REPO_ROOT / "data/output/channel_videos.json"
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("captions_worklist")
 
 PRIORITY_INSIGHTS = 1
-PRIORITY_TOP_VIEWS = 2
-PRIORITY_FUNDAMENTALS = 3
+PRIORITY_MODELSTREAM = 2
+PRIORITY_TOP_VIEWS = 3
 PRIORITY_REST = 4
+TOP_VIEW_LIMIT = 100
 
 PRIORITY_NAMES = {
     PRIORITY_INSIGHTS: "insights",
+    PRIORITY_MODELSTREAM: "modelstream-001",
     PRIORITY_TOP_VIEWS: "top-views",
-    PRIORITY_FUNDAMENTALS: "fundamentals-2026",
     PRIORITY_REST: "rest",
 }
-
-_NAMJOHOSHI = re.compile(r"Namjoshi2026/")
-_FUNDAMENTALS = re.compile(r"Fundamentals", re.IGNORECASE)
-
-
-def resolve_journal_dir(root: Path) -> Path:
-    """Resolve a journal checkout root for the sibling-worktree layout.
-
-    When INDEX.json is absent at ``root`` but present one level down (branch
-    checkouts like ``feat-m4-pages/``), use the most recently modified one
-    and say so — silently reading a stale branch's INDEX is worse than
-    surfacing the choice. Returns ``root`` unchanged when nothing resolves.
-    """
-    if (root / "INDEX.json").is_file():
-        return root
-    candidates = sorted(
-        (p.parent for p in root.glob("*/INDEX.json")),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    if candidates:
-        logger.warning(
-            "INDEX.json not at %s; using most recent branch checkout %s", root, candidates[0]
-        )
-        return candidates[0]
-    return root
 
 
 def load_json(path: Path) -> Any:  # noqa: ANN401
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (ValueError, OSError):
         return None
 
 
 def has_existing_srt(item_dir: Path) -> bool:
-    """True when the item already carries a non-translation caption SRT.
-
-    Mirrors the journal layout: derived caption SRTs live under
-    ``captions/``; ``Translations/`` holds machine-translated subs derived
-    FROM captions, which do not count as existing caption tracks.
-    """
+    """Report a local caption artifact independently of upload eligibility."""
     cap_dir = item_dir / "captions"
     if not cap_dir.is_dir():
         return False
     return any(p.suffix == ".srt" for p in cap_dir.iterdir() if p.is_file())
 
 
-def has_transcript(item_dir: Path) -> bool:
-    """True when a whisperx-style ``transcript.json`` exists."""
-    tj = item_dir / "transcript.json"
-    if not tj.is_file():
-        return False
-    try:
-        data = json.loads(tj.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return False
-    return isinstance(data, list) and any(
-        isinstance(b, dict) and isinstance(b.get("segments"), list) for b in data
-    )
-
-
-def classify(series: str, item_path: str, views: int | None) -> int:
-    """Assign the handoff priority bucket for one item."""
+def classify(series: str, item: str, views: int | None, transcript: bool) -> int:
+    """Assign an initial priority. Known views are meaningful with a transcript."""
+    if not transcript:
+        return PRIORITY_REST
     if series == "Insights":
         return PRIORITY_INSIGHTS
-    if views is not None and views > 0:
+    if series == "ModelStream" and item == "ModelStream_001":
+        return PRIORITY_MODELSTREAM
+    if views is not None:
         return PRIORITY_TOP_VIEWS
-    if "TextbookGroup" in item_path and (
-        _NAMJOHOSHI.search(item_path) or _FUNDAMENTALS.search(item_path)
-    ):
-        return PRIORITY_FUNDAMENTALS
     return PRIORITY_REST
+
+
+def _rank(row: dict[str, Any]) -> tuple[int, int, str, str, str]:
+    views = row["views"]
+    return (
+        row["priority"],
+        -views if isinstance(views, int) else 1,
+        row["series"],
+        row["item"],
+        row["video_id"],
+    )
 
 
 def build_worklist(journal_dir: Path, views_map: dict[str, int] | None) -> list[dict[str, Any]]:
     """One ranked row per video part across the journal INDEX."""
+    journal_dir = journal_dir.resolve()
     index_path = journal_dir / "INDEX.json"
     data = load_json(index_path)
     if not isinstance(data, dict) or not isinstance(data.get("items"), list):
         logger.error("INDEX.json not found or unreadable at %s", index_path)
         return []
     rows: list[dict[str, Any]] = []
+    views_by_video = views_map or {}
     for item in data["items"]:
-        if not isinstance(item, dict) or not item.get("path"):
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
             continue
-        item_dir = journal_dir / item["path"]
+        item_dir = (journal_dir / item["path"]).resolve()
+        if item_dir == journal_dir or not item_dir.is_relative_to(journal_dir):
+            continue
         series = str(item.get("series", ""))
-        transcript_ok = has_transcript(item_dir)
+        item_name = str(item.get("item", ""))
+        blocks = load_blocks(item_dir / "transcript.json")
         existing_srt = has_existing_srt(item_dir)
-        views_map = views_map or {}
         for vid in item.get("parts") or []:
             if not isinstance(vid, str) or not vid:
                 continue
-            views = views_map.get(vid)
-            priority = classify(series, item["path"], views)
+            views = views_by_video.get(vid)
+            transcript_ok = bool(segments_for_video(blocks, vid))
+            priority = classify(series, item_name, views, transcript_ok)
             rows.append(
                 {
                     "priority": priority,
                     "priority_name": PRIORITY_NAMES[priority],
                     "series": series,
-                    "item": item.get("item", ""),
+                    "item": item_name,
                     "video_id": vid,
                     "views": "" if views is None else views,
                     "transcript": str(transcript_ok).lower(),
                     "existing_srt": str(existing_srt).lower(),
-                    "srt_available": str(transcript_ok and not existing_srt).lower(),
+                    "srt_available": str(transcript_ok).lower(),
                     "item_path": item["path"],
                 }
             )
-    rows.sort(
-        key=lambda r: (
-            r["priority"],
-            -(r["views"] if isinstance(r["views"], int) else 0),
-            r["series"],
-            r["item"],
-            r["video_id"],
-        )
-    )
+    rows.sort(key=_rank)
+    top_view_rows = [row for row in rows if row["priority"] == PRIORITY_TOP_VIEWS]
+    for row in top_view_rows[TOP_VIEW_LIMIT:]:
+        row.update(priority=PRIORITY_REST, priority_name=PRIORITY_NAMES[PRIORITY_REST])
+    rows.sort(key=_rank)
     return rows
 
 
@@ -204,7 +141,7 @@ def load_views_map(channel_videos_path: Path) -> dict[str, int]:
         if not isinstance(v, dict) or not v.get("id"):
             continue
         views = v.get("view_count")
-        if isinstance(views, int) and views > 0:
+        if isinstance(views, int) and not isinstance(views, bool) and views >= 0:
             out[str(v["id"])] = views
     return out
 
@@ -277,7 +214,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Rank journal videos for caption upload (read-only).",
         epilog=(
-            "Priority: insights > top-views > fundamentals-2026 > rest. "
+            "Priority: Insights, ModelStream 001, top 100 remaining by known views, rest. "
             "The upload step re-verifies each row live (skip-if-existing-track); "
             "this CSV is a planning artifact, never a write authority."
         ),
@@ -314,7 +251,9 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0, help="Emit only the first N rows (0 = all)")
     args = parser.parse_args()
 
-    journal_dir = resolve_journal_dir(args.journal)
+    journal_dir = args.journal
+    if not (journal_dir / "INDEX.json").is_file():
+        parser.error("--journal must name the exact checkout containing INDEX.json")
     views_map = load_views_map(args.channel_videos)
     if args.fetch_views:
         views_map = fetch_views(journal_dir, views_map, args.views_cache)
