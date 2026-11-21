@@ -1,5 +1,7 @@
 """Unit tests for YouTube metadata and description formatter."""
 
+import pytest
+
 from journal_utilities.youtube.metadata_formatter import (
     ChapterEntry,
     assemble_video_description,
@@ -94,6 +96,12 @@ def test_assemble_video_description():
     assert "https://slides.example.com" in desc
     assert "Active Inference Institute information:" in desc
     assert "https://video.activeinference.institute/" in desc
+    assert "Donate: https://donate.activeinference.institute/" in desc
+    assert "YouTube: https://www.youtube.com/@ActiveInference\n" in desc
+    assert (
+        "Transcripts, captions & translations: "
+        "https://activeinferenceinstitute.github.io/ActiveInferenceJournal/"
+    ) in desc
     # The dead blob URL must never be emitted (Y1/E1/I1 regression lock).
     assert "blob/main/transcripts" not in desc
 
@@ -106,6 +114,50 @@ def test_assemble_video_description_has_no_implicit_transcript_fallback():
     )
     assert "Full Transcript" not in desc
     assert "github.com/ActiveInferenceInstitute/ActiveInferenceJournal" not in desc
+
+
+def test_canonical_journal_item_precedes_duplicate_alias_in_either_order():
+    video_id = "example1234"
+    canonical = {
+        "path": "data/video/activeinferenceinstitute/Symposium 2026/session #3",
+        "has_transcript": True,
+        "parts": [video_id],
+    }
+    alias = {
+        "path": "data/video/activeinferenceinstitute/Other/Session_003",
+        "has_transcript": False,
+        "parts": [video_id],
+        "duplicate_of": "Symposium 2026/session #3",
+    }
+    for rows in ([canonical, alias], [alias, canonical]):
+        projected = build_video_item_index(rows)
+        assert projected[video_id] == canonical
+        assert resolve_video_journal_url(video_id, projected).endswith(
+            "Symposium%202026/session%20%233"
+        )
+
+
+def test_journal_entry_without_transcript_gets_a_distinct_label():
+    url = build_journal_item_url("data/video/activeinferenceinstitute/Fundamentals/Session_028")
+    description = assemble_video_description(journal_item_url=url)
+    assert f"Active Inference Journal entry:\n{url}" in description
+    assert "Full Transcript" not in description
+
+
+def test_unsafe_journal_item_paths_do_not_produce_urls():
+    for item_path in (
+        "../INDEX.json",
+        "/private/records",
+        "data/./item",
+        "data\\item",
+        "in\nvalid",
+    ):
+        with pytest.raises(ValueError, match="relative repository path"):
+            build_journal_item_url(item_path)
+        item_index = build_video_item_index(
+            [{"path": item_path, "has_transcript": True, "parts": ["example1234"]}]
+        )
+        assert resolve_video_journal_url("example1234", item_index) is None
 
 
 def test_split_base_description_strips_legacy_timestamp_runs():

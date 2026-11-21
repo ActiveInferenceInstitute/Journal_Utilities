@@ -14,6 +14,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 CHAPTERS_MARKER_START = "--- TIMESTAMPS & CHAPTERS ---"
 CHAPTERS_MARKER_END = "--- RESOURCES & TRANSCRIPT ---"
@@ -27,10 +28,11 @@ STANDARD_INSTITUTE_LINKBLOCK = """Active Inference Institute information:
 Website: https://www.activeinference.institute/
 Activities: https://activities.activeinference.institute/
 Discord: https://discord.activeinference.institute/
-Donate: http://donate.activeinference.institute/
-YouTube: https://www.youtube.com/c/ActiveInference/
+Donate: https://donate.activeinference.institute/
+YouTube: https://www.youtube.com/@ActiveInference
 X: https://x.com/InferenceActive
-Active Inference Livestreams: https://video.activeinference.institute/""".strip()
+Active Inference Livestreams: https://video.activeinference.institute/
+Transcripts, captions & translations: https://activeinferenceinstitute.github.io/ActiveInferenceJournal/""".strip()
 
 
 def format_seconds_to_timestamp(seconds: float | int) -> str:
@@ -103,18 +105,34 @@ def build_journal_item_url(item_path: str) -> str:
     This is the per-item source tree (metadata, transcripts, captions) — never a
     guessed ``blob/main/transcripts/<video_id>.md`` path, which does not exist.
     """
-    return f"{JOURNAL_GITHUB_TREE_BASE}/{item_path}"
+    if (
+        any(part in {"", ".", ".."} for part in item_path.split("/"))
+        or "\\" in item_path
+        or any(ord(char) < 32 or ord(char) == 127 for char in item_path)
+    ):
+        raise ValueError("Journal item path must be a relative repository path")
+    return f"{JOURNAL_GITHUB_TREE_BASE}/{quote(item_path)}"
 
 
 def build_video_item_index(index_items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Map every video ID in journal ``INDEX.json`` items[].parts to its item record."""
+    """Map each part ID to its public Journal item, preferring the canonical row."""
     index: dict[str, dict[str, Any]] = {}
     for item in index_items:
-        if not isinstance(item, dict) or not item.get("path"):
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
             continue
-        for video_id in item.get("parts") or []:
-            if isinstance(video_id, str) and video_id:
+        parts = item.get("parts")
+        if not item["path"] or not isinstance(parts, list):
+            continue
+        for video_id in parts:
+            if not isinstance(video_id, str) or not video_id:
+                continue
+            previous = index.get(video_id)
+            if previous is None or (previous.get("duplicate_of") and not item.get("duplicate_of")):
                 index[video_id] = item
+            elif previous["path"] != item["path"] and not (
+                previous.get("duplicate_of") or item.get("duplicate_of")
+            ):
+                raise ValueError(f"Multiple canonical Journal items for video {video_id}")
     return index
 
 
@@ -136,7 +154,10 @@ def resolve_video_journal_url(
         has_transcript = bool(item.get("has_transcript"))
     if not has_transcript:
         return None
-    return build_journal_item_url(str(item["path"]))
+    try:
+        return build_journal_item_url(str(item["path"]))
+    except ValueError:
+        return None
 
 
 def format_chapters_block(chapters: Sequence[ChapterEntry | dict[str, Any]]) -> str:
@@ -229,6 +250,7 @@ def assemble_video_description(
     base_description: str = "",
     chapters: Sequence[ChapterEntry | dict[str, Any]] | None = None,
     github_transcript_url: str | None = None,
+    journal_item_url: str | None = None,
     slides_url: str | None = None,
     coda_url: str | None = None,
     category: str = "",
@@ -259,6 +281,8 @@ def assemble_video_description(
     res_lines: list[str] = []
     if github_transcript_url:
         res_lines.append(f"📄 Full Transcript on GitHub:\n{github_transcript_url}")
+    elif journal_item_url:
+        res_lines.append(f"📄 Active Inference Journal entry:\n{journal_item_url}")
     if slides_url:
         res_lines.append(f"📊 Presentation Slides:\n{slides_url}")
     if coda_url:

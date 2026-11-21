@@ -113,6 +113,24 @@ def test_plan_scaffolds_matches_index_naming(tmp_path: Path) -> None:
     )
 
 
+def test_symposium_livestream_days_plan_distinct_year_items(tmp_path: Path) -> None:
+    videos = [
+        ChannelVideo(
+            video_id="synthetic01",
+            title="6th Applied Active Inference Symposium (Day 1, Nov 12, 2026) ~ LIVE",
+        ),
+        ChannelVideo(
+            video_id="synthetic02",
+            title="6th Applied Active Inference Symposium (Day 2, Nov 13, 2026) ~ LIVE",
+        ),
+    ]
+    plans = plan_scaffolds(videos, tmp_path)
+    parent = Path("data/video/activeinferenceinstitute/Applied Active Inference Symposium/2026")
+    assert [plan.relative_dir for plan in plans] == [parent / "Day 1", parent / "Day 2"]
+    assert [plan.metadata["item"] for plan in plans] == ["Day 1", "Day 2"]
+    assert all(plan.metadata["series"] == "Applied Active Inference Symposium" for plan in plans)
+
+
 def test_no_scaffold_ever_lands_in_flattened_textbook_dir(tmp_path: Path) -> None:
     """Regression: scaffolds must not mint flattened TextbookGroup_* dirs."""
     videos = [
