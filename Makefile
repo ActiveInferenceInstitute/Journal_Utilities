@@ -151,4 +151,4 @@ journal-check:
 	uv run python run.py journal-check --journal $(JOURNAL_DIR) --utilities . --manifest $(MANIFEST)
 
 yt-dryrun:
-	uv run python scripts/sync_youtube_metadata.py --dry-run $(if $(VIDEO),--video-id $(VIDEO),)
+	uv run --extra youtube python scripts/sync_youtube_metadata.py --dry-run $(if $(VIDEO),--video-id $(VIDEO),)

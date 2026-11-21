@@ -6,6 +6,8 @@ shape. The real ``_build_service`` path is never exercised here (it performs
 network I/O for discovery).
 """
 
+import pytest
+
 from journal_utilities.youtube.client import (
     QUOTA_COSTS,
     QuotaBudgetExceededError,
@@ -13,6 +15,7 @@ from journal_utilities.youtube.client import (
     UpdateResult,
     VideoSnippet,
     YouTubeClient,
+    YouTubeReadError,
 )
 
 
@@ -191,7 +194,7 @@ def test_update_failure_reports_error():
         VideoSnippet(video_id="v", title="t", description="d"), dry_run=False
     )
     assert result.success is False
-    assert "invalidDescription" in (result.error or "")
+    assert result.error == "RuntimeError"
     assert isinstance(result, UpdateResult)
 
 
@@ -222,8 +225,68 @@ def test_list_playlist_items_paginates():
 
 def test_list_captions_and_playlists():
     client = YouTubeClient(service=FakeService())
-    assert client.list_captions("vid1")[0]["id"] == "cap1"
+    ledger = QuotaLedger(50)
+    assert client.list_captions("vid1", strict=True, ledger=ledger)[0]["id"] == "cap1"
+    assert ledger.spent == 50
     assert client.list_playlists("UCxyz")[0]["id"] == "pl1"
+
+
+def test_strict_reads_refuse_a_repeated_page_and_charge_each_request():
+    service = FakeService(
+        playlist_pages=[
+            {"items": [{"id": "one"}], "nextPageToken": "loop"},
+            {"items": [{"id": "two"}], "nextPageToken": "loop"},
+        ]
+    )
+    ledger = QuotaLedger(2)
+    with pytest.raises(YouTubeReadError, match="repeated page token"):
+        YouTubeClient(service=service).list_playlist_items("PLx", strict=True, ledger=ledger)
+    assert ledger.spent == 2
+
+
+def test_strict_caption_failure_does_not_masquerade_as_no_existing_tracks():
+    class BrokenCaptions:
+        def list(self, **kwargs):
+            raise RuntimeError("remote detail with key=secret")
+
+    class BrokenService:
+        def captions(self):
+            return BrokenCaptions()
+
+    with pytest.raises(YouTubeReadError, match=r"captions.list failed \(RuntimeError\)$"):
+        YouTubeClient(service=BrokenService()).list_captions("vid1", strict=True)
+
+
+def test_snippet_preserves_provider_metadata_language():
+    raw = _snippet_item()
+    raw.update(defaultLanguage="en-GB", defaultAudioLanguage="en-GB", channelId="UCxyz")
+    snippet = VideoSnippet.from_api({"id": "vid1", "snippet": raw})
+    assert snippet.to_body()["snippet"]["defaultLanguage"] == "en-GB"
+    assert "defaultAudioLanguage" not in snippet.to_body()["snippet"]
+    assert "channelId" not in snippet.to_body()["snippet"]
+
+
+def test_owner_check_requires_exact_unambiguous_oauth_channel():
+    class ChannelService:
+        def __init__(self, ids):
+            self.ids = ids
+
+        def channels(self):
+            return self
+
+        def list(self, **kwargs):
+            assert kwargs == {"part": "id", "mine": True}
+            return FakeRequest({"items": [{"id": channel_id} for channel_id in self.ids]})
+
+    ledger = QuotaLedger(2)
+    YouTubeClient(service=ChannelService(["UCexpected"])).require_channel(
+        "UCexpected", ledger=ledger
+    )
+    with pytest.raises(YouTubeReadError, match="does not select"):
+        YouTubeClient(service=ChannelService(["UCexpected", "UCother"])).require_channel(
+            "UCexpected", ledger=ledger
+        )
+    assert ledger.spent == 2
 
 
 def test_insert_caption_body_includes_isdraft(tmp_path):

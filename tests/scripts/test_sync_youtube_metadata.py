@@ -18,6 +18,8 @@ from scripts.sync_youtube_metadata import (
     sync_videos,
 )
 
+from journal_utilities.ingest.enumerate import DEFAULT_CHANNEL_ID
+
 
 class FakeLedger:
     def __init__(self, budget: int = 10_000):
@@ -40,6 +42,8 @@ class FakeSnippet:
     description: str = "Live description with abstract and credits."
     category_id: str = "27"
     tags: list[str] = field(default_factory=list)
+    default_language: str | None = None
+    channel_id: str = DEFAULT_CHANNEL_ID
 
 
 class FakeClient:

@@ -13,14 +13,11 @@ Design:
   service (or a fake client) — nothing here talks to YouTube on its own.
 - Google libraries are imported lazily so the module is importable (and
   testable with fakes) without google-api-python-client present.
-- OAuth (scope ``youtube.force-ssl``) is required for writes; an API key alone
-  only builds a read-only service. OAuth token owner (DAF, 2026-09):
-  **admin@activeinference.institute** — the org account
-  ``ActiveInferenceInstitute``. The ``ActInfInstitute`` account is
-  personal/admin: do NOT authorize writes with it.
-- :class:`QuotaLedger` implements the per-call quota accounting mandated by the
-  handoff (videos.update=50, captions.insert=400, playlistItems.insert=50,
-  list=1) against the 10,000 units/day default budget.
+- OAuth (scope ``youtube.force-ssl``) is required for writes. The Institute
+  operator must select the intended channel during consent, and the write
+  entry point verifies it with ``channels.list(mine=True)``.
+- :class:`QuotaLedger` accounts for each request, including 50 units for
+  captions.list and 400 for captions.insert.
 
 Secrets come from env only; nothing is hardcoded or logged.
 """
@@ -28,12 +25,20 @@ Secrets come from env only; nothing is hardcoded or logged.
 from __future__ import annotations
 
 import logging
-import socket
+import os
+import tempfile
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _error_kind(exc: Exception) -> str:
+    status = getattr(getattr(exc, "resp", None), "status", None)
+    return f"HTTP {status}" if isinstance(status, int) else type(exc).__name__
+
 
 #: Quota cost per Data API call, per the pipeline hard rules (default budget
 #: is 10,000 units/day).
@@ -41,7 +46,7 @@ QUOTA_COSTS: dict[str, int] = {
     "channels.list": 1,
     "videos.list": 1,
     "videos.update": 50,
-    "captions.list": 1,
+    "captions.list": 50,
     "captions.insert": 400,
     "playlists.list": 1,
     "playlists.insert": 50,
@@ -54,6 +59,10 @@ class QuotaBudgetExceededError(RuntimeError):  # noqa: N818
     """Raised when spending an operation would exceed the configured budget."""
 
 
+class YouTubeReadError(RuntimeError):
+    """Raised when an API read cannot support a definite result."""
+
+
 @dataclass(frozen=True)
 class VideoSnippet:
     """The snippet fields the sync pipeline reads and writes."""
@@ -63,6 +72,8 @@ class VideoSnippet:
     description: str = ""
     category_id: str = "27"
     tags: list[str] = field(default_factory=list)
+    default_language: str | None = None
+    channel_id: str = ""
 
     @classmethod
     def from_api(cls, item: dict[str, Any]) -> VideoSnippet:
@@ -72,21 +83,23 @@ class VideoSnippet:
             video_id=item.get("id", ""),
             title=snippet.get("title", ""),
             description=snippet.get("description", ""),
-            category_id=snippet.get("categoryId", "27"),
+            category_id=snippet.get("categoryId", ""),
             tags=list(snippet.get("tags") or []),
+            default_language=snippet.get("defaultLanguage"),
+            channel_id=snippet.get("channelId", ""),
         )
 
     def to_body(self) -> dict[str, Any]:
         """Build the ``videos.update`` request body."""
-        return {
-            "id": self.video_id,
-            "snippet": {
-                "title": self.title,
-                "description": self.description,
-                "categoryId": self.category_id,
-                "tags": self.tags,
-            },
+        snippet = {
+            "title": self.title,
+            "description": self.description,
+            "categoryId": self.category_id,
+            "tags": self.tags,
         }
+        if self.default_language is not None:
+            snippet["defaultLanguage"] = self.default_language
+        return {"id": self.video_id, "snippet": snippet}
 
 
 @dataclass(frozen=True)
@@ -110,7 +123,7 @@ class QuotaLedger:
         return self.budget - self.spent
 
     def can_spend(self, operation: str) -> bool:
-        return QUOTA_COSTS.get(operation, 0) <= self.remaining
+        return QUOTA_COSTS[operation] <= self.remaining
 
     def spend(self, operation: str) -> int:
         """Charge ``operation`` against the budget; returns units remaining.
@@ -161,34 +174,26 @@ class YouTubeClient:
         authorize writes). Writes require OAuth via ``client_secrets_path``
         (+ ``token_path`` to cache credentials) — scope ``youtube.force-ssl``.
         """
-        # httplib2 (googleapiclient's transport) has no per-request timeout; a
-        # dead connection otherwise stalls a batch run forever (observed on
-        # videos.update 2026-09-24). The global socket timeout bounds every
-        # request; reads and writes complete well inside it.
-        socket.setdefaulttimeout(120)
-
+        from google_auth_httplib2 import AuthorizedHttp
         from googleapiclient.discovery import build
+        from httplib2 import Http
 
+        http = Http(timeout=30)
         if self._api_key and not (self._client_secrets_path or self._token_path):
             logger.info("Building read-only YouTube service (API key).")
             return build(
-                "youtube",
-                "v3",
-                developerKey=self._api_key,
-                static_discovery=False,
+                "youtube", "v3", developerKey=self._api_key, http=http, cache_discovery=False
             )
 
         credentials = self._load_oauth_credentials()
         logger.info("Building YouTube service with OAuth (youtube.force-ssl).")
-        return build("youtube", "v3", credentials=credentials, static_discovery=False)
+        return build(
+            "youtube", "v3", http=AuthorizedHttp(credentials, http=http), cache_discovery=False
+        )
 
     def _load_oauth_credentials(self) -> Any:  # noqa: ANN401
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
-
-        # google_auth_oauthlib ships no stubs and is an optional runtime dep
-        # (write mode only); import-not-found is suppressed for that reason.
-        from google_auth_oauthlib.flow import InstalledAppFlow
 
         creds: Credentials | None = None
         if self._token_path and Path(self._token_path).is_file():
@@ -199,6 +204,8 @@ class YouTubeClient:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())  # type: ignore[no-untyped-call]
             elif self._client_secrets_path:
+                from google_auth_oauthlib.flow import InstalledAppFlow
+
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self._client_secrets_path, [self.SCOPE]
                 )
@@ -210,10 +217,89 @@ class YouTubeClient:
                     "cannot authorize videos.update / captions.insert."
                 )
             if self._token_path:
-                Path(self._token_path).write_text(creds.to_json(), encoding="utf-8")
+                token = Path(self._token_path)
+                fd, temporary = tempfile.mkstemp(prefix=f".{token.name}.", dir=token.parent)
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                        stream.write(creds.to_json())
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    os.replace(temporary, token)
+                finally:
+                    Path(temporary).unlink(missing_ok=True)
         return creds
 
     # ------------------------------------------------------------------ reads
+
+    def _list_response(
+        self,
+        operation: str,
+        params: dict[str, Any],
+        *,
+        ledger: QuotaLedger | None,
+        strict: bool,
+    ) -> dict[str, Any] | None:
+        if ledger is not None:
+            ledger.spend(operation)
+        try:
+            resource = getattr(self.service, operation.removesuffix(".list"))()
+            response = resource.list(**params).execute()
+        except Exception as exc:
+            # The provider exception can contain a URL with an API key.
+            message = f"{operation} failed ({_error_kind(exc)})"
+            if strict:
+                raise YouTubeReadError(message) from None
+            logger.warning("%s", message)
+            return None
+        if (
+            not isinstance(response, dict)
+            or not isinstance(response.get("items"), list)
+            or any(not isinstance(item, dict) for item in response["items"])
+        ):
+            message = f"{operation} returned a malformed response"
+            if strict:
+                raise YouTubeReadError(message)
+            logger.warning("%s", message)
+            return None
+        return dict(response)
+
+    def _list_pages(
+        self,
+        operation: str,
+        params: dict[str, Any],
+        *,
+        ledger: QuotaLedger | None,
+        strict: bool,
+    ) -> Iterator[dict[str, Any]]:
+        seen = set()
+        while True:
+            response = self._list_response(operation, params, ledger=ledger, strict=strict)
+            if response is None:
+                return
+            yield from response["items"]
+            token = response.get("nextPageToken")
+            if token is None or token == "":
+                return
+            if not isinstance(token, str) or token in seen:
+                message = f"{operation} returned an invalid or repeated page token"
+                if strict:
+                    raise YouTubeReadError(message)
+                logger.warning("%s", message)
+                return
+            seen.add(token)
+            params = {**params, "pageToken": token}
+
+    def require_channel(self, channel_id: str, *, ledger: QuotaLedger | None = None) -> None:
+        """Verify the OAuth session selects exactly the expected YouTube channel."""
+        response = self._list_response(
+            "channels.list", {"part": "id", "mine": True}, ledger=ledger, strict=True
+        )
+        if (
+            response is None
+            or response.get("nextPageToken")
+            or [item.get("id") for item in response["items"]] != [channel_id]
+        ):
+            raise YouTubeReadError("OAuth does not select the expected YouTube channel")
 
     def get_video_snippet(self, video_id: str) -> VideoSnippet | None:
         """Fetch the live snippet via the Data API (videos.list, 1 unit).
@@ -222,15 +308,15 @@ class YouTubeClient:
         callers MUST treat ``None`` as "no write allowed" (Rule 1); there is no
         manifest/yt-dlp fallback.
         """
-        try:
-            response = self.service.videos().list(part="snippet", id=video_id).execute()
-        except Exception as exc:  # googleapiclient raises HttpError family
-            logger.warning("videos.list failed for %s: %s", video_id, exc)
+        response = self._list_response(
+            "videos.list", {"part": "snippet", "id": video_id}, ledger=None, strict=False
+        )
+        if not response or len(response["items"]) != 1:
             return None
-        items = response.get("items", [])
-        if not items:
+        item = response["items"][0]
+        if item.get("id") != video_id or not isinstance(item.get("snippet"), dict):
             return None
-        return VideoSnippet.from_api(items[0])
+        return VideoSnippet.from_api(item)
 
     def get_video_snippets(
         self, video_ids: list[str], batch_size: int = 50
@@ -239,85 +325,80 @@ class YouTubeClient:
         snippets: dict[str, VideoSnippet] = {}
         for i in range(0, len(video_ids), batch_size):
             batch = video_ids[i : i + batch_size]
-            try:
-                response = self.service.videos().list(part="snippet", id=",".join(batch)).execute()
-            except Exception as exc:
-                logger.warning("videos.list batch failed: %s", exc)
+            response = self._list_response(
+                "videos.list", {"part": "snippet", "id": ",".join(batch)}, ledger=None, strict=False
+            )
+            if response is None:
                 continue
-            for item in response.get("items", []):
+            for item in response["items"]:
                 snippet = VideoSnippet.from_api(item)
                 if snippet.video_id:
                     snippets[snippet.video_id] = snippet
         return snippets
 
-    def get_uploads_playlist_id(self, channel_id: str) -> str | None:
+    def get_uploads_playlist_id(
+        self, channel_id: str, *, strict: bool = False, ledger: QuotaLedger | None = None
+    ) -> str | None:
         """Return the channel's uploads playlist ID (channels.list, 1 unit)."""
-        try:
-            response = self.service.channels().list(part="contentDetails", id=channel_id).execute()
-        except Exception as exc:
-            logger.warning("channels.list failed for %s: %s", channel_id, exc)
-            return None
-        items = response.get("items", [])
-        if not items:
-            return None
-        # uploads playlist id; API shape is nested gets typed Any
-        uploads = items[0].get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
-        return str(uploads) if uploads else None
+        response = self._list_response(
+            "channels.list",
+            {"part": "contentDetails", "id": channel_id},
+            ledger=ledger,
+            strict=strict,
+        )
+        items = response["items"] if response else []
+        if len(items) == 1 and items[0].get("id") == channel_id:
+            content = items[0].get("contentDetails")
+            related = content.get("relatedPlaylists") if isinstance(content, dict) else None
+            uploads = related.get("uploads") if isinstance(related, dict) else None
+            if isinstance(uploads, str) and uploads:
+                return uploads
+        if strict:
+            raise YouTubeReadError("Could not verify the channel's uploads playlist")
+        return None
 
-    def list_playlist_items(self, playlist_id: str) -> list[dict[str, Any]]:
+    def list_playlist_items(
+        self, playlist_id: str, *, strict: bool = False, ledger: QuotaLedger | None = None
+    ) -> list[dict[str, Any]]:
         """Page through a playlist's items (playlistItems.list, 1 unit/page)."""
-        items: list[dict[str, Any]] = []
-        page_token: str | None = None
-        while True:
-            params: dict[str, Any] = {
-                "part": "contentDetails,snippet",
-                "playlistId": playlist_id,
-                "maxResults": 50,
-            }
-            if page_token:
-                params["pageToken"] = page_token
-            try:
-                response = self.service.playlistItems().list(**params).execute()
-            except Exception as exc:
-                logger.warning("playlistItems.list failed: %s", exc)
-                break
-            items.extend(response.get("items", []))
-            page_token = response.get("nextPageToken")
-            if not page_token:
-                break
-        return items
+        return list(
+            self._list_pages(
+                "playlistItems.list",
+                {
+                    "part": "contentDetails,snippet",
+                    "playlistId": playlist_id,
+                    "maxResults": 50,
+                },
+                ledger=ledger,
+                strict=strict,
+            )
+        )
 
-    def list_captions(self, video_id: str) -> list[dict[str, Any]]:
-        """List caption tracks (captions.list, 1 unit). Read-only with API key."""
-        try:
-            response = self.service.captions().list(part="snippet", videoId=video_id).execute()
-        except Exception as exc:
-            logger.warning("captions.list failed for %s: %s", video_id, exc)
-            return []
-        return list(response.get("items", []))
+    def list_captions(
+        self, video_id: str, *, strict: bool = False, ledger: QuotaLedger | None = None
+    ) -> list[dict[str, Any]]:
+        """List caption tracks using OAuth (50 units)."""
+        response = self._list_response(
+            "captions.list", {"part": "snippet", "videoId": video_id}, ledger=ledger, strict=strict
+        )
+        return response["items"] if response else []
 
-    def list_playlists(self, channel_id: str) -> list[dict[str, Any]]:
+    def list_playlists(
+        self, channel_id: str, *, strict: bool = False, ledger: QuotaLedger | None = None
+    ) -> list[dict[str, Any]]:
         """Page through a channel's playlists (playlists.list, 1 unit/page)."""
-        playlists: list[dict[str, Any]] = []
-        page_token: str | None = None
-        while True:
-            params: dict[str, Any] = {
-                "part": "snippet,contentDetails",
-                "channelId": channel_id,
-                "maxResults": 50,
-            }
-            if page_token:
-                params["pageToken"] = page_token
-            try:
-                response = self.service.playlists().list(**params).execute()
-            except Exception as exc:
-                logger.warning("playlists.list failed: %s", exc)
-                break
-            playlists.extend(response.get("items", []))
-            page_token = response.get("nextPageToken")
-            if not page_token:
-                break
-        return playlists
+        return list(
+            self._list_pages(
+                "playlists.list",
+                {
+                    "part": "snippet,contentDetails,status",
+                    "channelId": channel_id,
+                    "maxResults": 50,
+                },
+                ledger=ledger,
+                strict=strict,
+            )
+        )
 
     # ----------------------------------------------------------------- writes
 
@@ -328,8 +409,9 @@ class YouTubeClient:
         try:
             self.service.videos().update(part="snippet", body=snippet.to_body()).execute()
         except Exception as exc:
-            logger.error("videos.update failed for %s: %s", snippet.video_id, exc)
-            return UpdateResult(success=False, error=str(exc))
+            error = _error_kind(exc)
+            logger.error("videos.update failed for %s (%s)", snippet.video_id, error)
+            return UpdateResult(success=False, error=error)
         return UpdateResult(success=True)
 
     def insert_caption(
@@ -362,12 +444,17 @@ class YouTubeClient:
                 .execute()
             )
         except Exception as exc:
-            logger.error("captions.insert failed for %s: %s", video_id, exc)
+            logger.error("captions.insert failed for %s (%s)", video_id, _error_kind(exc))
             return None
         return dict(response)
 
     def list_videos(
-        self, video_ids: list[str], part: str = "snippet,statistics"
+        self,
+        video_ids: list[str],
+        part: str = "snippet,statistics",
+        *,
+        strict: bool = False,
+        ledger: QuotaLedger | None = None,
     ) -> list[dict[str, Any]]:
         """videos.list (1 unit per call; up to 50 comma-separated ids each).
 
@@ -379,16 +466,23 @@ class YouTubeClient:
             chunk = [vid for vid in video_ids[i : i + 50] if vid]
             if not chunk:
                 continue
-            try:
-                response = (
-                    self.service.videos()
-                    .list(part=part, id=",".join(chunk), maxResults=50)
-                    .execute()
-                )
-            except Exception as exc:
-                logger.error("videos.list failed for batch %d: %s", i // 50, exc)
-                continue
-            out.extend(response.get("items", []))
+            response = self._list_response(
+                "videos.list",
+                {"part": part, "id": ",".join(chunk)},
+                ledger=ledger,
+                strict=strict,
+            )
+            if response is not None:
+                items = response["items"]
+                if strict:
+                    returned = [item.get("id") for item in items]
+                    if (
+                        any(not isinstance(vid, str) or vid not in chunk for vid in returned)
+                        or len(set(returned)) != len(returned)
+                        or response.get("nextPageToken")
+                    ):
+                        raise YouTubeReadError("videos.list did not return the requested IDs")
+                out.extend(items)
         return out
 
     def insert_playlist(

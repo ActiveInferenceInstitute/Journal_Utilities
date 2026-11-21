@@ -32,7 +32,7 @@ jobs:
       # The extras the suite imports; the GPU / Apple-Silicon transcription
       # extras are lazy and are not needed by any arm. One environment, one sync.
       - name: Sync the locked gate environment
-        run: uv sync --frozen --extra rag --extra interface --extra export --dev
+        run: uv sync --frozen --extra rag --extra interface --extra export --extra youtube --dev
 
       - name: Run the gate arms
         run: uv run --frozen python run.py gate lint format types test docs
