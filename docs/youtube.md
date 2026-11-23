@@ -39,6 +39,21 @@ pre-update snapshots outside tracked files.
 | `src/journal_utilities/ingest/` | Weekly channel enumeration / scaffold / reconciliation (M3) — read-only. The weekly workflow is **secret-free** (`yt-dlp` flat pass + delta full extractions; no key, no quota); the Data API path (~32 units/run) remains the manual alternative. |
 | `scripts/upload_captions.py` | Reviewed English captions from WhisperX word timings. See [Caption preparation and uploads](youtube-captions.md). |
 
+## Chapter generation and validation
+
+`chapter_generator.py` generates timestamped chapters with Ollama or
+OpenRouter from time windows across the full transcript. The gate checks the
+chapter count, initial timestamp, gaps, duration coverage and title quality.
+The speaker-name rule flags name-shaped titles beginning with a known given
+name. Titles like “Mean Field Approximation” pass this rule. Titles like
+“Karl Friston” fail it.
+
+Creator and YouTube auto chapters live in `data/input/video_chapters.json`.
+Generated entries go in `data/input/video_chapters_llm.json` with
+`source`, `model`, and `generated_at` provenance. Journal session seeding
+accepts YouTube entries and generated entries that pass validation against the
+duration of the relevant video part.
+
 ## Channel QA and public backlog
 
 ```bash

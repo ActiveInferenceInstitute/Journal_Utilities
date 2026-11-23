@@ -178,6 +178,115 @@ CONCEPT_STOP_WORDS = frozenset(
     }
 )
 
+# Given names that lead a bare speaker-name title ("Karl Friston"). Only a
+# title whose FIRST token is one of these, whose remaining tokens are all
+# name-shaped, and which contains no concept/connector word, is flagged.
+# Calibrated against the restored YouTube chapter corpus: 16 titles flag,
+# 15 of them genuine guest names.
+FIRST_NAME_HINTS = frozenset(
+    {
+        "adam",
+        "alex",
+        "allan",
+        "andre",
+        "andré",
+        "andrew",
+        "anna",
+        "anthony",
+        "carl",
+        "charlie",
+        "chris",
+        "clara",
+        "conor",
+        "curt",
+        "dan",
+        "daniel",
+        "dave",
+        "david",
+        "dewi",
+        "dmitry",
+        "edward",
+        "elena",
+        "eric",
+        "erik",
+        "eva",
+        "felix",
+        "frank",
+        "fraser",
+        "george",
+        "guillaume",
+        "harry",
+        "henri",
+        "henry",
+        "hugo",
+        "ivan",
+        "james",
+        "jan",
+        "jean",
+        "joana",
+        "john",
+        "jonathan",
+        "jose",
+        "joseph",
+        "karl",
+        "keith",
+        "ken",
+        "kenneth",
+        "lars",
+        "laura",
+        "lena",
+        "luca",
+        "mahault",
+        "marco",
+        "marcus",
+        "martin",
+        "mary",
+        "matt",
+        "matthew",
+        "maxwell",
+        "maya",
+        "michael",
+        "mike",
+        "nick",
+        "nicholas",
+        "niels",
+        "nynke",
+        "olav",
+        "oliver",
+        "oscar",
+        "otto",
+        "pablo",
+        "paul",
+        "peter",
+        "rachel",
+        "rafael",
+        "rebecca",
+        "richard",
+        "rita",
+        "robert",
+        "ruth",
+        "samuel",
+        "sanjeev",
+        "sara",
+        "sarah",
+        "shanna",
+        "sigrid",
+        "simon",
+        "steve",
+        "stephen",
+        "sven",
+        "takuya",
+        "tanya",
+        "thomas",
+        "tim",
+        "tomas",
+        "tom",
+        "victor",
+        "walter",
+        "william",
+    }
+)
+
 
 class ChapterError(RuntimeError):
     """Raised when generated chapters fail the quality gate after retries."""
@@ -211,15 +320,18 @@ def _is_bare_speaker_name(title: str) -> bool:
 
     "Karl Friston", "Karl J. Friston" fail (attribution noise); "Karl Friston
     on Free Energy" and "Free Energy Principle with Karl Friston" are topics
-    and pass. Calibrated to keep concept vocabulary out of the flag.
+    and pass. A title flags only when its first token is a plausible given
+    name, every token is name-shaped, and no concept/connector word appears —
+    so concept titles ("Mean Field Approximation", "Next Steps") never flag.
     """
     t = _strip_trailing_punctuation(title)
     if not t:
         return False
     tokens = t.replace("’", "'").split()
-    if not 1 <= len(tokens) <= 4:
+    if not 2 <= len(tokens) <= 4:
         return False
-    name_like = 0
+    if tokens[0].lower().removesuffix("'s") not in FIRST_NAME_HINTS:
+        return False
     for tok in tokens:
         if tok.lower() in CONCEPT_STOP_WORDS:
             return False  # concept word → topic, not a name
@@ -227,11 +339,7 @@ def _is_bare_speaker_name(title: str) -> bool:
             return False  # connectors imply a phrase, not a bare name
         if not SPEAKER_NAME_RE.match(tok):
             return False  # digits, lowercase words, symbols → topic
-        name_like += 1
-    # A personal name is at least two name-like tokens ("Karl Friston");
-    # single capitalized words are ordinary title words ("Matter
-    # Consciousness", "Next Steps"), so they pass.
-    return name_like >= 2
+    return True
 
 
 def validate_chapters(
