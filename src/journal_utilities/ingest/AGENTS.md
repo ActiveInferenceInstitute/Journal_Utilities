@@ -1,7 +1,7 @@
 # Agent guide — journal_utilities.ingest
 
 The `journal_utilities.ingest` package. See [`README.md`](README.md) for the module
-map and [`../../../docs/m3-ingest.md`](../../../docs/m3-ingest.md) for the workflow.
+map and [`../../../docs/pipeline/m3-ingest.md`](../../../docs/pipeline/m3-ingest.md) for the workflow.
 
 ## Conventions
 - Default to dry-run; only write behind the module's explicit opt-in flag.

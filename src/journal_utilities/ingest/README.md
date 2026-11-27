@@ -13,6 +13,6 @@ opt-in) and the module never writes to YouTube.
 | `diff.py` | Quota-free channel-vs-manifest-vs-`INDEX.json` reconciliation report. |
 
 Workflow, status-evidence rules (including the `unknown` rule) and the journal-side
-schedule live in [`../../../docs/m3-ingest.md`](../../../docs/m3-ingest.md).
+schedule live in [`../../../docs/pipeline/m3-ingest.md`](../../../docs/pipeline/m3-ingest.md).
 
 Part of [Journal-Utilities](../../../README.md). See [`../../../docs/README.md`](../../../docs/README.md).

@@ -15,6 +15,6 @@ subtitles, full-text search) plus crawlable per-item pages, `sitemap.xml` and
 
 Run it through [`../../../scripts/build_pages_site.py`](../../../scripts/build_pages_site.py)
 (dry-run by default; `--apply` writes, `--check` is the drift gate). Full contract
-in [`../../../docs/site.md`](../../../docs/site.md).
+in [`../../../docs/operations/site.md`](../../../docs/operations/site.md).
 
 Part of [Journal-Utilities](../../../README.md). See [`../../../docs/README.md`](../../../docs/README.md).

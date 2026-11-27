@@ -16,8 +16,8 @@ Journal-Utilities is a Python processing pipeline for Active Inference Institute
 ## Journal v2 refactor
 
 `scripts/refactor_journal.py` transforms the sibling `ActiveInferenceJournal` repo into
-the uniform v2 schema — see [`docs/JOURNAL_SCHEMA.md`](docs/JOURNAL_SCHEMA.md) and
-[`docs/REFACTOR_READINESS.md`](docs/REFACTOR_READINESS.md). Run `--build <dir>` for an
+the uniform v2 schema — see [`docs/reference/JOURNAL_SCHEMA.md`](docs/reference/JOURNAL_SCHEMA.md) and
+[`docs/operations/REFACTOR_READINESS.md`](docs/operations/REFACTOR_READINESS.md). Run `--build <dir>` for an
 out-of-place staging tree (audit/dry-run); content-based item detection + a passthrough
 pass guarantee zero data loss (reconcile total source files == captured + intentional
 drops before any in-place apply). Audio is split to the journal's `audio` branch

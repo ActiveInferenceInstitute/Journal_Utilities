@@ -1,7 +1,7 @@
 # Journal Refactor — Readiness & Pipeline State
 
 Preparation status for the ActiveInferenceJournal v2 refactor + mega-push. Read with
-[`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md) (target schema) and the repo `CLAUDE.md`.
+[`JOURNAL_SCHEMA.md`](../reference/JOURNAL_SCHEMA.md) (target schema) and the repo `CLAUDE.md`.
 
 _Last validated: 2026-06-29._
 
@@ -10,7 +10,7 @@ _Last validated: 2026-06-29._
 > drift by design — see `docs/AGENTS.md` ("do not hardcode counts"). The
 > converter has since moved to **content-based item detection + passthrough +
 > an idempotent uncovered-video coverage pass** (see `scripts/refactor_journal.py`
-> and `docs/JOURNAL_SCHEMA.md`), so the BLOCKER section below no longer applies
+> and `docs/reference/JOURNAL_SCHEMA.md`), so the BLOCKER section below no longer applies
 > to the current code.
 
 ## Coverage — Institute channel (UCbPq2w41ZaJSWtpCq4BE6Dg)

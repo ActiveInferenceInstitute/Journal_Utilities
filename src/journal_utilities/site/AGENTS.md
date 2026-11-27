@@ -1,7 +1,7 @@
 # Agent guide — journal_utilities.site
 
 The `journal_utilities.site` package. See [`README.md`](README.md) for the module map
-and [`../../../docs/site.md`](../../../docs/site.md) for the URL contract.
+and [`../../../docs/operations/site.md`](../../../docs/operations/site.md) for the URL contract.
 
 ## Conventions
 - The generated bundle, per-item pages, sitemap and robots are **build outputs** —

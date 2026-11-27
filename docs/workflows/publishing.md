@@ -55,7 +55,7 @@ validator also remains authoritative for its existing checks.
 
 ## Schema ownership
 
-[`JOURNAL_SCHEMA.md`](../JOURNAL_SCHEMA.md) now points to the lead for schema and
+[`JOURNAL_SCHEMA.md`](../reference/JOURNAL_SCHEMA.md) now points to the lead for schema and
 identity definitions and retains only the pipeline writing and maintenance
 instructions. It is no longer a prose mirror.
 

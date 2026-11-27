@@ -2,7 +2,7 @@
 
 The YouTube surface is **read-mostly with an explicitly guarded write path**.
 Everything here enforces the pipeline handoff rules (see the repo root
-`AGENTS.md` and `docs/m3-ingest.md`):
+`AGENTS.md` and `docs/pipeline/m3-ingest.md`):
 
 - **Rule 1 — no write without a live snippet.** `scripts/sync_youtube_metadata.py`
   refuses to update a video unless the live snippet was fetched through the

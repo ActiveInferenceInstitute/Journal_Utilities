@@ -44,7 +44,7 @@ Controls the download step (`uv run python run.py download`). The standalone
 **Reserved — no current consumer.** The transcription scripts take their options as
 CLI flags instead: `scripts/transcribe_missing.py --max-files N` (local mlx-whisper)
 and `scripts/transcribe_worklist.py --batch-size N --compute-type float16` (GPU
-WhisperX). Engine/model defaults live in code; see `docs/transcription.md`.
+WhisperX). Engine/model defaults live in code; see `docs/pipeline/transcription.md`.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
@@ -117,8 +117,8 @@ modules below read the individual variables.
 | `COHERE_MODEL` | `journal_utilities.rag` | Cohere model (default `command-a-03-2025`). |
 | `OLLAMA_BASE_URL` | chat (`chat_engine.py`) | Ollama API URL (default `http://localhost:11434`). |
 | `OLLAMA_MODEL` | chat (`chat_engine.py`) | Chat model (default `gemma3:4b`). |
-| `CHAT_MAX_CONTEXT` / `CHAT_MAX_HISTORY` / `CHAT_MAX_SESSIONS` | chat (`chat_engine.py`) | Context size, history length, session cap — see `docs/chat_engine.md`. |
-| `DB_URL` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` / `DB_NAMESPACE` | `journal_utilities.data` | SurrealDB connection — see `docs/data.md`. |
-| `SURREALDB_URL` / `SURREALDB_USERNAME` / `SURREALDB_PASSWORD` / `SURREALDB_DATABASE` / `SURREALDB_NAMESPACE` | `journal_utilities.rag` | SurrealDB graph connection — see `docs/rag.md`. |
+| `CHAT_MAX_CONTEXT` / `CHAT_MAX_HISTORY` / `CHAT_MAX_SESSIONS` | chat (`chat_engine.py`) | Context size, history length, session cap — see `docs/operations/chat_engine.md`. |
+| `DB_URL` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` / `DB_NAMESPACE` | `journal_utilities.data` | SurrealDB connection — see `docs/reference/data.md`. |
+| `SURREALDB_URL` / `SURREALDB_USERNAME` / `SURREALDB_PASSWORD` / `SURREALDB_DATABASE` / `SURREALDB_NAMESPACE` | `journal_utilities.rag` | SurrealDB graph connection — see `docs/operations/rag.md`. |
 | `PRIVATE_VIDEOS_PATH` | `journal_utilities.youtube` | Where the private-video registry is stored (default: `<repo>/data/private_videos.json`). |
 | `PORT` / `HOST` | Web UI (`interface/app.py`) | Web UI host/port overrides (defaults `8000` / `0.0.0.0`). |

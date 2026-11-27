@@ -52,7 +52,7 @@ Verification pass: every claim below was re-run on this checkout, not carried ov
       `scripts/gate/identity.py` (+ `identity_selftest.py`), and makes the `docs` arm
       run `scripts/gate/check_docs.py`, which chains `scripts/check_docs_links.py`,
       the identity check and the per-artifact `--verify-copy` digests. `.aii/config.yaml`
-      tasks and `docs/JOURNAL_SCHEMA.md` (now a pointer, not a mirror) follow the same
+      tasks and `docs/reference/JOURNAL_SCHEMA.md` (now a pointer, not a mirror) follow the same
       contract.
 - [x] **E2 formatter switch is complete** — the formatting-only commit is `9cb2642`
       ("style: apply ruff format across src, tests, scripts (52 files) [E2]"); `black`
@@ -131,7 +131,7 @@ Open after this pass:
       is written by `run.py gate report`; `tests/README.md` and the guides no longer
       carry hand-maintained counts.
 - [x] **Docs refreshed** — `docs/documentation-index.md` added (template convention),
-      `docs/data.md` records the SurrealDB 3.x client facts (factory + awaitables,
+      `docs/reference/data.md` records the SurrealDB 3.x client facts (factory + awaitables,
       `rag` extra), `AGENTS.md` stops claiming `[database]` is read by code.
 
 Open after this pass:
@@ -206,12 +206,12 @@ Severity definitions:
 - **ME1 — `scripts/README.md` missing guides for 7 scripts** — add sections for
   `speaker_cues.py`, `apply_speaker_names.py`, `transcribe_worklist.py`,
   `transcription_status.py`, `fetch_chapters.py`, `recover_whisperx.py`,
-  `refactor_journal.py` (cross-link `docs/JOURNAL_SCHEMA.md`); it currently documents
+  `refactor_journal.py` (cross-link `docs/reference/JOURNAL_SCHEMA.md`); it currently documents
   only 6 of 13 scripts. ✓ `docs(scripts): document all CLI tools` (commit `60583a4`)
 
 - **ME2 — `make extract-entities` runs a nonexistent module** — `Makefile` target runs
   `uv run python -m journalrag.main`; no `journalrag` package exists (it is
-  `journal_utilities.rag.main`). `docs/rag.md` tells users to run `make extract-entities`.
+  `journal_utilities.rag.main`). `docs/operations/rag.md` tells users to run `make extract-entities`.
   Fix the target so the documented command works. ✓ `fix(make): extract-entities -> journal_utilities.rag.main`
   (commit `06a1356`)
 
@@ -230,7 +230,7 @@ Severity definitions:
   fake `tests-pytest` / `coverage-pytest` shields.io badges with the real GitHub Actions
   CI badge for the public workflow. ✓ `docs(readme): real CI badge` (commit `bf3449f`)
 
-- **ME6 — `docs/configuration.md` claims `[transcribe]`/`[database]` control behavior,
+- **ME6 — `docs/reference/configuration.md` claims `[transcribe]`/`[database]` control behavior,
   but nothing consumes them** — `[download]`, `[export]`, `[interface]`, `[general]`,
   `[pipeline]` are read by `run.py`; `[transcribe]` and `[database]` are not read by any
   code (env vars `HF_TOKEN`/`DB_*` drive those). Document this accurately, move the
@@ -240,7 +240,7 @@ Severity definitions:
 
 ### Minor
 
-- **MI1 — `docs/youtube.md` stale enumeration method** — claims the `UU…` uploads
+- **MI1 — `docs/pipeline/youtube.md` stale enumeration method** — claims the `UU…` uploads
   playlist "contains every public video"; `channel.py` unions the `/videos` +
   `/streams` + `/shorts` tabs (the `UU…` form truncates at ~100). Also add `description`
   / `url` to the documented `VideoInfo` fields. ✓ `docs(youtube): tabs-union enumeration`
@@ -248,16 +248,16 @@ Severity definitions:
 
 - **MI2 — `make transcribe` described as WhisperX everywhere, but runs local
   mlx-whisper** — `Makefile` `transcribe:` runs `scripts/transcribe_missing.py`.
-  Fix in `docs/transcription.md` (GPU section), `src/journal_utilities/AGENTS.md`
+  Fix in `docs/pipeline/transcription.md` (GPU section), `src/journal_utilities/AGENTS.md`
   ("Legacy Operations" table), and the Makefile help text. ✓ `docs(transcribe): make transcribe is local mlx-whisper`
   (commit `60583a4`)
 
-- **MI3 — `docs/chat_engine.md` chunk-size and missing env row** — context chunks are
+- **MI3 — `docs/operations/chat_engine.md` chunk-size and missing env row** — context chunks are
   `MAX_CONTEXT_CHARS // 3` ≈ 2600 chars (not "approx 2000"); add undocumented
   `CHAT_MAX_SESSIONS` (200). ✓ `docs(chat): exact chunk size + CHAT_MAX_SESSIONS`
   (commit `b7255a0`)
 
-- **MI4 — `docs/rag.md` stale model example** — `COHERE_MODEL` default is
+- **MI4 — `docs/operations/rag.md` stale model example** — `COHERE_MODEL` default is
   `command-a-03-2025` (`rag/settings.py`, `.env.example`), doc says `command-r-plus`.
   ✓ `docs(rag): current COHERE_MODEL default` (commit `b7255a0`)
 
@@ -273,7 +273,7 @@ Severity definitions:
   `tests/journal_utilities/rag/`. ✓ `chore(tests): fix journalrag naming drift in docstrings`
   (commit `a3b543a`)
 
-- **MI7 — `docs/configuration.md` misplaced `[pipeline]` heading** — `### [pipeline]`
+- **MI7 — `docs/reference/configuration.md` misplaced `[pipeline]` heading** — `### [pipeline]`
   sits inside "## Environment Variables"; move to the sections list. (Fold into ME6.)
 
 - **MI8 — TODO.md historical stale backticked paths** — the historical section's
@@ -281,7 +281,7 @@ Severity definitions:
   actual tests/journal_utilities/…. (Fixed in this rewrite; see historical
   section below.)
 
-- **MI9 — `docs/JOURNAL_SCHEMA.md` provenance table cites `assets/csv/` but the
+- **MI9 — `docs/reference/JOURNAL_SCHEMA.md` provenance table cites `assets/csv/` but the
   per-item tree omits it** — add `csv/` to the assets listing. ✓ `docs(journal-schema): assets/csv in tree`
   (commit `b7255a0`)
 
@@ -404,7 +404,7 @@ whitelist + numeric coercion + tail-window + tokenizer threshold; chat model per
 `categorizer` dead code removed.
 
 **Docs/policy:** `tests/README.md` + `tests/AGENTS.md` live test counts; `interface/AGENTS.md` API table;
-root `AGENTS.md` mock-policy reconciled; `docs/REFACTOR_READINESS.md` marked a historical snapshot.
+root `AGENTS.md` mock-policy reconciled; `docs/operations/REFACTOR_READINESS.md` marked a historical snapshot.
 
 ---
 
@@ -422,12 +422,12 @@ root `AGENTS.md` mock-policy reconciled; `docs/REFACTOR_READINESS.md` marked a h
 
 ## Follow-up pass — deferred items landed (2026-08-02)
 
-- **TR1 — Land the subtitle-translation feature** (was "README `docs/translation.md`
+- **TR1 — Land the subtitle-translation feature** (was "README `docs/pipeline/translation.md`
   row" + untracked WIP): committed `scripts/translate_subtitles.py` (local Ollama),
   `scripts/translate_subtitles_openrouter.py` (hosted OpenRouter),
   `scripts/translate_tb_watchdog.sh` (portable resumable watchdog),
   `tests/journal_utilities/test_translate_subtitles{,_openrouter}.py`, the new
-  `docs/translation.md`, the README docs-table row, and the
+  `docs/pipeline/translation.md`, the README docs-table row, and the
   `.translate_tb_watchdog.lock*` gitignore pattern. The earlier duplicate OpenRouter
   variant (`scripts/translate_openrouter.py`) was **consolidated** into
   `translate_subtitles_openrouter.py` — its placeholder-hash skip, batch echo
@@ -482,13 +482,13 @@ root `AGENTS.md` mock-policy reconciled; `docs/REFACTOR_READINESS.md` marked a h
 - Gate entry point: `uv run python run.py gate lint format types test docs` (plus `gnn`);
   the argv exists once in `gate_commands()` in `run.py` and both CI jobs call it. See
   `docs/RUN_GUIDE.md`.
-- The journal schema is defined by ActiveInferenceJournal, not here — `docs/JOURNAL_SCHEMA.md`
+- The journal schema is defined by ActiveInferenceJournal, not here — `docs/reference/JOURNAL_SCHEMA.md`
   links the canonical prose and describes only how this pipeline writes and checks it. The
   read-only maintenance gates are
   `scripts/{enrich_metadata,repair_split_transcripts,generate_journal_indexes,validate_journal}.py`.
 - This section's 2026-08-02 pass was docs-only + config fixes; the follow-up pass landed the
   subtitle-translation feature (local Ollama + hosted OpenRouter engines, see
-  `docs/translation.md`).
+  `docs/pipeline/translation.md`).
 
 ---
 
@@ -553,7 +553,7 @@ link. The transcripts moved into the journal data tree; the blob URLs 404.
   a `videos.update` indefinitely), and the sync script skips unchanged snippets
   (idempotency guard: 1 read unit instead of a 50-unit write; regression test
   `test_idempotent_run_skips_write`).
-- Docs: `docs/privacy.md` added and indexed (pipeline touches only the
+- Docs: `docs/reference/privacy.md` added and indexed (pipeline touches only the
   Institute's own public content; writes are OAuth `youtube.force-ssl` under
   `admin@activeinference.institute`).
 

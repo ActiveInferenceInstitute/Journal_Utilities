@@ -11,4 +11,4 @@ Static assets served by the FastAPI SPA in [`../app.py`](../app.py).
 
 These are hand-written sources (never generated). Edit them here; the interface
 serves this directory at runtime. See the parent package [`README.md`](../README.md)
-and [`../../../../docs/web_interface.md`](../../../../docs/web_interface.md).
+and [`../../../../docs/operations/web_interface.md`](../../../../docs/operations/web_interface.md).

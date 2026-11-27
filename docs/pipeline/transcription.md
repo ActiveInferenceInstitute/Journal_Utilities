@@ -37,7 +37,7 @@ uv run python scripts/transcribe_missing.py --max-files 5 --model mlx-community/
 Designed for production-grade transcription with speaker identification (diarization)
 and word-level alignment. Journal transcripts produced here follow the raw-vs-derived
 design — `transcript.json` keeps machine `SPEAKER_NN` labels forever; human names live
-only in `metadata.json` `parts[].speakers` (see [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md)).
+only in `metadata.json` `parts[].speakers` (see [`JOURNAL_SCHEMA.md`](../reference/JOURNAL_SCHEMA.md)).
 
 ### Requirements
 

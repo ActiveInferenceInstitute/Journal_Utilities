@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refactor the ActiveInferenceJournal into the v2 schema (see docs/JOURNAL_SCHEMA.md).
+"""Refactor the ActiveInferenceJournal into the v2 schema (see docs/reference/JOURNAL_SCHEMA.md).
 
 DRY-RUN by default: classifies every file in every item folder into its v2 target
 (or an intentional placeholder-drop), and reports an audit so we can prove zero

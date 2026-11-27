@@ -9,21 +9,21 @@ module- and workflow-level guides.
 
 | Doc | Covers |
 | --- | --- |
-| [`youtube_download.md`](youtube_download.md) | Downloading transcripts/audio/video via `yt-dlp` (`download/downloader.py`). |
-| [`transcription.md`](transcription.md) | Local Whisper (`mlx-whisper`) and WhisperX transcription. |
-| [`data.md`](data.md) | Data layout, manifests, and the SurrealDB store. |
-| [`rag.md`](rag.md) | Entity/relationship extraction (Cohere → SurrealDB graph). |
-| [`export.md`](export.md) | Multi-format transcript export (plaintext/PDF/MD/JSON/HTML). |
-| [`render.md`](render.md) | Markdown/HTML rendering, course scaffolding. |
-| [`site.md`](site.md) | Static GitHub Pages bundle, URL contract, sitemap. |
-| [`web_interface.md`](web_interface.md) | FastAPI SPA for browsing the library. |
-| [`chat_engine.md`](chat_engine.md) | Ollama-powered RAG chat over transcripts. |
-| [`translation.md`](translation.md) | Hosted OpenRouter subtitle translation (`scripts/translate_subtitles_openrouter.py`). |
-| [`configuration.md`](configuration.md) | `config.ini` + `.env` reference. |
-| [`youtube.md`](youtube.md) | YouTube integration — enumeration (`youtube/channel.py`), guarded write path, quota rules, OAuth ownership. |
-| [`youtube-captions.md`](youtube-captions.md) | English WhisperX caption preparation and reviewed uploads. |
-| [`m3-ingest.md`](m3-ingest.md) | Weekly channel enumeration / scaffold / reconciliation (M3). |
-| [`privacy.md`](privacy.md) | What the pipeline processes, what it never does, API usage, retention. |
+| [`youtube_download.md`](pipeline/youtube_download.md) | Downloading transcripts/audio/video via `yt-dlp` (`download/downloader.py`). |
+| [`transcription.md`](pipeline/transcription.md) | Local Whisper (`mlx-whisper`) and WhisperX transcription. |
+| [`data.md`](reference/data.md) | Data layout, manifests, and the SurrealDB store. |
+| [`rag.md`](operations/rag.md) | Entity/relationship extraction (Cohere → SurrealDB graph). |
+| [`export.md`](pipeline/export.md) | Multi-format transcript export (plaintext/PDF/MD/JSON/HTML). |
+| [`render.md`](pipeline/render.md) | Markdown/HTML rendering, course scaffolding. |
+| [`site.md`](operations/site.md) | Static GitHub Pages bundle, URL contract, sitemap. |
+| [`web_interface.md`](operations/web_interface.md) | FastAPI SPA for browsing the library. |
+| [`chat_engine.md`](operations/chat_engine.md) | Ollama-powered RAG chat over transcripts. |
+| [`translation.md`](pipeline/translation.md) | Hosted OpenRouter subtitle translation (`scripts/translate_subtitles_openrouter.py`). |
+| [`configuration.md`](reference/configuration.md) | `config.ini` + `.env` reference. |
+| [`youtube.md`](pipeline/youtube.md) | YouTube integration — enumeration (`youtube/channel.py`), guarded write path, quota rules, OAuth ownership. |
+| [`youtube-captions.md`](pipeline/youtube-captions.md) | English WhisperX caption preparation and reviewed uploads. |
+| [`m3-ingest.md`](pipeline/m3-ingest.md) | Weekly channel enumeration / scaffold / reconciliation (M3). |
+| [`privacy.md`](reference/privacy.md) | What the pipeline processes, what it never does, API usage, retention. |
 
 ## Gates and generated evidence
 
@@ -39,13 +39,13 @@ document here; the `docs` gate arm fails when a `docs/*.md` file is missing from
 
 | Doc | Covers |
 | --- | --- |
-| [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md) | Canonical schema pointers and pipeline maintenance instructions. |
-| [`REFACTOR_READINESS.md`](REFACTOR_READINESS.md) | Coverage, the local-LLM stack, and the refactor/verification process. |
+| [`JOURNAL_SCHEMA.md`](reference/JOURNAL_SCHEMA.md) | Canonical schema pointers and pipeline maintenance instructions. |
+| [`REFACTOR_READINESS.md`](operations/REFACTOR_READINESS.md) | Coverage, the local-LLM stack, and the refactor/verification process. |
 
 ## Collaboration
 
 Journal-Utilities is the **code**; ActiveInferenceJournal is the **content** and owns
-the schema. [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md) links to that authority and keeps
+the schema. [`JOURNAL_SCHEMA.md`](reference/JOURNAL_SCHEMA.md) links to that authority and keeps
 only pipeline instructions. The [Publishing integration](workflows/publishing.md)
 records the unchanged canonical copies and their digest checks.
 
@@ -57,3 +57,13 @@ CLI tools (channel download, transcription, journal maintenance) are documented 
 
 [`AGENTS.md`](AGENTS.md) records the rules for editing this tree (hand-written, no
 hardcoded corpus counts, canonical schema pointers rather than prose mirrors).
+
+## Research manuscript
+
+- [From Public Video to a Traceable Transcript Corpus](manuscript/README.md) — paper source and reproducible PDF build.
+
+## Documentation areas
+
+- [Media processing and export](pipeline/README.md)
+- [Schema and configuration](reference/README.md)
+- [Running and serving](operations/README.md)
