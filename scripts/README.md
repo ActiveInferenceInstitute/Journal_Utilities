@@ -21,11 +21,11 @@ Recovery/repair           repair_split_transcripts.py, recover_whisperx.py,
 Journal v2 maintenance    enrich_metadata.py -> repair_split_transcripts.py
                           -> generate_journal_indexes.py -> validate_journal.py (read-only gate)
 Publication surfaces      build_pages_site.py (journal -> static GitHub Pages bundle)
-Translation               translate_subtitles_openrouter.py (docs/translation.md)
+Translation               translate_subtitles_openrouter.py (docs/pipeline/translation.md)
 Curriculum                scaffold_youtube_courses.py
 ```
 
-The canonical maintenance chain is documented in `docs/JOURNAL_SCHEMA.md`; the
+The canonical maintenance chain is documented in `docs/reference/JOURNAL_SCHEMA.md`; the
 read-only `validate_journal.py` is the acceptance gate for every step above.
 
 ## Gate scripts
@@ -224,7 +224,7 @@ source pairs are available.
 
 These tools operate on the sibling journal repo (`--journal`, default
 `../ActiveInferenceJournal`) and follow the raw-vs-derived transcript design in
-[`docs/JOURNAL_SCHEMA.md`](../docs/JOURNAL_SCHEMA.md): `transcript.json` keeps
+[`docs/reference/JOURNAL_SCHEMA.md`](../docs/reference/JOURNAL_SCHEMA.md): `transcript.json` keeps
 machine `SPEAKER_NN` labels forever; human names live only in `metadata.json`
 `parts[].speakers`.
 
@@ -278,7 +278,7 @@ python scripts/recover_whisperx.py --item "GuestStream/GuestStream_040"
 
 ### `refactor_journal.py`
 
-Refactor the journal into the v2 schema (see `docs/JOURNAL_SCHEMA.md`). Dry-run
+Refactor the journal into the v2 schema (see `docs/reference/JOURNAL_SCHEMA.md`). Dry-run
 by default: classifies every file and audits zero data loss before applying.
 Applying is done out-of-place with `--build <dir>` (staging copy), then validated
 with `validate_journal.py` before swapping in. `--apply` is intentionally refused
@@ -291,7 +291,7 @@ python scripts/refactor_journal.py --journal ../ActiveInferenceJournal --build /
 
 ## Subtitle Translation (`translate_subtitles_openrouter.py`)
 
-Translate per-item caption SRTs (`captions/*.srt`) in `ActiveInferenceJournal` into 11 target languages (es/fr/de/pt/it/nl/ru/ja/ko/zh-Hans/zh-Hant). See full guide in [`docs/translation.md`](../docs/translation.md).
+Translate per-item caption SRTs (`captions/*.srt`) in `ActiveInferenceJournal` into 11 target languages (es/fr/de/pt/it/nl/ru/ja/ko/zh-Hans/zh-Hant). See full guide in [`docs/pipeline/translation.md`](../docs/pipeline/translation.md).
 
 ### Hosted OpenRouter Translation (`translate_subtitles_openrouter.py`)
 

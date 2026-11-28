@@ -61,7 +61,7 @@ graph LR
 ```
 
 > **One command** runs the configured application pipeline: `uv run python run.py`
-> **One file** controls all options: `config.ini` — [see reference →](docs/configuration.md)
+> **One file** controls all options: `config.ini` — [see reference →](docs/reference/configuration.md)
 
 ---
 
@@ -96,7 +96,7 @@ What needs network, credentials or a private checkout:
 
 Enumerate the Active Inference channel from a saved manifest. Download transcripts, audio, and video (cookie-free by default) with rate limiting and resume. Transcribe locally on Apple Silicon or GPU with speaker diarization.
 
-**→** [Download Guide](docs/youtube_download.md) · [Transcription Engines](docs/transcription.md) · [YouTube Module](docs/youtube.md)
+**→** [Download Guide](docs/pipeline/youtube_download.md) · [Transcription Engines](docs/pipeline/transcription.md) · [YouTube Module](docs/pipeline/youtube.md)
 
 </td>
 <td width="50%">
@@ -105,7 +105,7 @@ Enumerate the Active Inference channel from a saved manifest. Download transcrip
 
 FastAPI SPA with searchable video library, embedded YouTube player, transcript viewer, and category browser. Ollama-powered RAG chat with automatic context retrieval.
 
-**→** [Web Interface](docs/web_interface.md) · [Chat Engine](docs/chat_engine.md)
+**→** [Web Interface](docs/operations/web_interface.md) · [Chat Engine](docs/operations/chat_engine.md)
 
 </td>
 </tr>
@@ -116,7 +116,7 @@ FastAPI SPA with searchable video library, embedded YouTube player, transcript v
 
 Batch-export to Markdown, JSON, HTML, PDF, and plaintext — each enriched with metadata headers (title, category, series, speakers, duration, URL, views).
 
-**→** [Export Guide](docs/export.md)
+**→** [Export Guide](docs/pipeline/export.md)
 
 </td>
 <td>
@@ -125,7 +125,7 @@ Batch-export to Markdown, JSON, HTML, PDF, and plaintext — each enriched with 
 
 Cohere AI entity extraction (people, concepts, theories, organizations) and relationship mapping into a SurrealDB knowledge graph.
 
-**→** [RAG Pipeline](docs/rag.md) · [Data & Database](docs/data.md)
+**→** [RAG Pipeline](docs/operations/rag.md) · [Data & Database](docs/reference/data.md)
 
 </td>
 </tr>
@@ -240,26 +240,26 @@ Journal-Utilities/
 ## 📚 Documentation
 
 All technical detail lives in `docs/`. The README you're reading is the overview and entry point.
-See [`docs/JOURNAL_SCHEMA.md`](docs/JOURNAL_SCHEMA.md) for the ActiveInferenceJournal v2 schema
-and [`docs/REFACTOR_READINESS.md`](docs/REFACTOR_READINESS.md) for the refactor pipeline
+See [`docs/reference/JOURNAL_SCHEMA.md`](docs/reference/JOURNAL_SCHEMA.md) for the ActiveInferenceJournal v2 schema
+and [`docs/operations/REFACTOR_READINESS.md`](docs/operations/REFACTOR_READINESS.md) for the refactor pipeline
 (`scripts/refactor_journal.py`).
 
 | Guide | What You'll Find |
 |-------|------------------|
-| [**Configuration**](docs/configuration.md) | `config.ini` sections, environment variables, pipeline step control |
-| [**YouTube**](docs/youtube.md) | Channel enumeration, playlist parsing, title categorization |
-| [**Download**](docs/youtube_download.md) | Cookie auth, 403 troubleshooting, download strategies |
-| [**Transcription**](docs/transcription.md) | MLX-Whisper (Mac), WhisperX (GPU), model selection |
-| [**Subtitles → Translations**](docs/translation.md) | Hosted OpenRouter subtitle translation |
-| [**Export**](docs/export.md) | Format details, metadata enrichment, library API |
-| [**Web Interface**](docs/web_interface.md) | API endpoints, SPA frontend, development server |
-| [**Chat Engine**](docs/chat_engine.md) | Ollama RAG, prompt engineering, model auto-discovery |
-| [**RAG & Graph**](docs/rag.md) | Cohere extraction, entity schema, knowledge graph |
-| [**Data & Database**](docs/data.md) | SurrealDB schema, Coda import, audit trails |
-| [**Render**](docs/render.md) | Playlist → course scaffolding, `module.md` format |
-| [**Site**](docs/site.md) | Static GitHub Pages bundle, URL contract, sitemap |
-| [**M3 Ingest**](docs/m3-ingest.md) | Weekly channel enumeration, scaffold, reconciliation |
-| [**Privacy**](docs/privacy.md) | Processing boundaries, API usage, retention |
+| [**Configuration**](docs/reference/configuration.md) | `config.ini` sections, environment variables, pipeline step control |
+| [**YouTube**](docs/pipeline/youtube.md) | Channel enumeration, playlist parsing, title categorization |
+| [**Download**](docs/pipeline/youtube_download.md) | Cookie auth, 403 troubleshooting, download strategies |
+| [**Transcription**](docs/pipeline/transcription.md) | MLX-Whisper (Mac), WhisperX (GPU), model selection |
+| [**Subtitles → Translations**](docs/pipeline/translation.md) | Hosted OpenRouter subtitle translation |
+| [**Export**](docs/pipeline/export.md) | Format details, metadata enrichment, library API |
+| [**Web Interface**](docs/operations/web_interface.md) | API endpoints, SPA frontend, development server |
+| [**Chat Engine**](docs/operations/chat_engine.md) | Ollama RAG, prompt engineering, model auto-discovery |
+| [**RAG & Graph**](docs/operations/rag.md) | Cohere extraction, entity schema, knowledge graph |
+| [**Data & Database**](docs/reference/data.md) | SurrealDB schema, Coda import, audit trails |
+| [**Render**](docs/pipeline/render.md) | Playlist → course scaffolding, `module.md` format |
+| [**Site**](docs/operations/site.md) | Static GitHub Pages bundle, URL contract, sitemap |
+| [**M3 Ingest**](docs/pipeline/m3-ingest.md) | Weekly channel enumeration, scaffold, reconciliation |
+| [**Privacy**](docs/reference/privacy.md) | Processing boundaries, API usage, retention |
 | [**Gate & CI**](docs/RUN_GUIDE.md) | `run.py gate` arms, environment, measured wall time |
 | [**Agent Guide**](AGENTS.md) | Architecture, code patterns, agent development rules |
 
@@ -300,7 +300,7 @@ branch's no-audio/no-credentials boundary is inconsistent.
 ## 🎙️ Transcription & speaker naming
 
 Journal transcripts follow a **raw vs derived** design (see
-[`docs/JOURNAL_SCHEMA.md`](docs/JOURNAL_SCHEMA.md)): `transcript.json` is the
+[`docs/reference/JOURNAL_SCHEMA.md`](docs/reference/JOURNAL_SCHEMA.md)): `transcript.json` is the
 immutable raw WhisperX diarization (`SPEAKER_NN` labels, never rewritten),
 human speaker names live only in `metadata.json` `parts[].speakers`, and
 `transcript.txt` is regenerated from the two. Private/unlisted videos are
@@ -361,3 +361,7 @@ InstituteOS metadata (`aii-sidecar/v1`): category, maturity, ecosystem relations
 key artifacts, provenance, and portable tasks. It is read by
 [InstituteOS](https://github.com/ActiveInferenceInstitute/InstituteOS) tooling and
 does not affect the project's build or runtime.
+
+## Methods manuscript
+
+[From Public Video to a Traceable Transcript Corpus](docs/manuscript/README.md) includes the paper source and reproducible PDF build.

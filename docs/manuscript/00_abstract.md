@@ -1,0 +1,3 @@
+# Abstract
+
+Journal Utilities processes the Active Inference Institute's public video library into transcript-oriented outputs. This architecture study examines the separation between working inputs, derived corpus records and operator-controlled publication. The repository describes independent steps for enumeration, capture, transcription, enrichment, validation and delivery. Corpus identity and schema live in the companion ActiveInferenceJournal repository. An offline source audit shows how the pipeline preserves a canonical metadata surface and makes downstream validation explicit, while live audio transcription and platform writes require evidence beyond this study [@source].

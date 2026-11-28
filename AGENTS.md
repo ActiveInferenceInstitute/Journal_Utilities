@@ -11,16 +11,16 @@ Journal-Utilities is a modular, config-driven system for processing the Active I
 
 | Pipeline | Source | Key Files | Doc Reference |
 | :--- | :--- | :--- | :--- |
-| **YouTube** | `src/journal_utilities/youtube/` | `channel.py`, `categorizer.py` | [docs/youtube.md](docs/youtube.md) |
-| **Download** | `src/journal_utilities/download/` | `downloader.py` | [docs/youtube_download.md](docs/youtube_download.md) |
-| **Transcription** | `src/journal_utilities/transcribe/` | `transcriber.py` (Mac), `transcribe.py` (GPU) | [docs/transcription.md](docs/transcription.md) |
-| **Data** | `src/journal_utilities/data/` | `database.py`, `importer.py` | [docs/data.md](docs/data.md) |
-| **RAG** | `src/journal_utilities/rag/` | `main.py`, `extractors/` | [docs/rag.md](docs/rag.md) |
-| **Export** | `src/journal_utilities/export/` | `exporter.py` | [docs/export.md](docs/export.md) |
-| **Render** | `src/journal_utilities/render/` | `renderer.py` | [docs/render.md](docs/render.md) |
-| **Interface** | `src/journal_utilities/interface/` | `app.py`, `chat_engine.py` | [docs/web_interface.md](docs/web_interface.md) |
-| **Site** | `src/journal_utilities/site/` | `builder.py`, `pages_site.py`, `sitemap.py` | [docs/site.md](docs/site.md) |
-| **Ingest** | `src/journal_utilities/ingest/` | `enumerate.py`, `ytdlp.py`, `scaffold.py` | [docs/m3-ingest.md](docs/m3-ingest.md) |
+| **YouTube** | `src/journal_utilities/youtube/` | `channel.py`, `categorizer.py` | [docs/pipeline/youtube.md](docs/pipeline/youtube.md) |
+| **Download** | `src/journal_utilities/download/` | `downloader.py` | [docs/pipeline/youtube_download.md](docs/pipeline/youtube_download.md) |
+| **Transcription** | `src/journal_utilities/transcribe/` | `transcriber.py` (Mac), `transcribe.py` (GPU) | [docs/pipeline/transcription.md](docs/pipeline/transcription.md) |
+| **Data** | `src/journal_utilities/data/` | `database.py`, `importer.py` | [docs/reference/data.md](docs/reference/data.md) |
+| **RAG** | `src/journal_utilities/rag/` | `main.py`, `extractors/` | [docs/operations/rag.md](docs/operations/rag.md) |
+| **Export** | `src/journal_utilities/export/` | `exporter.py` | [docs/pipeline/export.md](docs/pipeline/export.md) |
+| **Render** | `src/journal_utilities/render/` | `renderer.py` | [docs/pipeline/render.md](docs/pipeline/render.md) |
+| **Interface** | `src/journal_utilities/interface/` | `app.py`, `chat_engine.py` | [docs/operations/web_interface.md](docs/operations/web_interface.md) |
+| **Site** | `src/journal_utilities/site/` | `builder.py`, `pages_site.py`, `sitemap.py` | [docs/operations/site.md](docs/operations/site.md) |
+| **Ingest** | `src/journal_utilities/ingest/` | `enumerate.py`, `ytdlp.py`, `scaffold.py` | [docs/pipeline/m3-ingest.md](docs/pipeline/m3-ingest.md) |
 
 The generated journal boundary is maintained by the scripts in `scripts/`. Use
 `enrich_metadata.py` for explicit metadata enrichment, then
@@ -33,7 +33,7 @@ must be passed explicitly when operating outside the default layout.
 ### General Rules
 
 1. **Configuration First**: Never hardcode paths or settings. Use `config.ini` (via `run.py` config loader).
-2. **Modular Docs**: If you modify a module (e.g., `rag`), you **MUST** update its corresponding doc file (`docs/rag.md`).
+2. **Modular Docs**: If you modify a module (e.g., `rag`), you **MUST** update its corresponding doc file (`docs/operations/rag.md`).
 3. **Linting**: Ensure all markdown and python code is lint-free.
 4. **Testing**: Run `uv run python run.py gate` before submitting changes.
 
@@ -48,14 +48,14 @@ must be passed explicitly when operating outside the default layout.
 #### Modifying the Database Schema
 
 1. Check `src/journal_utilities/data/database.py`.
-2. If adding a new table, document it in `docs/data.md`.
+2. If adding a new table, document it in `docs/reference/data.md`.
 3. Ensure `importer.py` audit trails cover the new data.
 
 #### Improving Prompt Engineering
 
 1. Edit `src/journal_utilities/interface/chat_engine.py`.
 2. Test changes with the `gemma3:4b` model (the default).
-3. Document prompt changes in `docs/chat_engine.md`.
+3. Document prompt changes in `docs/operations/chat_engine.md`.
 
 ## 3. Development Workflow
 
@@ -157,7 +157,7 @@ All pipeline options live in `config.ini` (plaintext INI format):
 - `[export]` — enabled formats, output directory
 - `[interface]` — host, port
 - `[database]` — informational mirror of the `DB_*` env vars; no code reads this
-  section (see `docs/configuration.md`)
+  section (see `docs/reference/configuration.md`)
 
 ## Testing
 

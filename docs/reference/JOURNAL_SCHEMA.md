@@ -6,8 +6,8 @@ The schema belongs to ActiveInferenceJournal, not this pipeline repository:
   defines the folder layout, metadata and raw-versus-derived transcript layers.
 - [Publishing contract](https://github.com/ActiveInferenceInstitute/ActiveInferenceJournal/blob/main/docs/workflows/publishing.md)
   defines cross-repository identity and joins.
-- [Pinned identity schema](workflows/record-identity.schema.json) is copied unchanged
-  from the lead and checked by the [local Publishing integration](workflows/publishing.md).
+- [Pinned identity schema](../workflows/record-identity.schema.json) is copied unchanged
+  from the lead and checked by the [local Publishing integration](../workflows/publishing.md).
 
 Do not maintain a second schema definition here. The following chapters describe
 how Journal-Utilities writes and checks the corpus.

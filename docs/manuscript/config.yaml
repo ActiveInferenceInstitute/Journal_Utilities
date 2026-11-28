@@ -1,0 +1,34 @@
+{
+  "paper": {
+    "title": "From Public Video to a Traceable Transcript Corpus",
+    "subtitle": "An architecture and verification study of Journal Utilities"
+  },
+  "authors": [
+    {
+      "name": "Active Inference Institute"
+    }
+  ],
+  "publication": {
+    "repository_url": "https://github.com/ActiveInferenceInstitute/Journal_Utilities",
+    "release_status": "unreleased"
+  },
+  "metadata": {
+    "language": "en",
+    "license": "CC0-1.0"
+  },
+  "keywords": [
+    "transcription",
+    "corpus engineering",
+    "provenance"
+  ],
+  "manuscript_dir": "docs/manuscript",
+  "render": {
+    "formats": {
+      "pdf": true,
+      "html": false,
+      "slides": false,
+      "docx": false,
+      "epub": false
+    }
+  }
+}

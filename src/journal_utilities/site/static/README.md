@@ -10,4 +10,4 @@ Front-end shell copied into the static GitHub Pages bundle by
 | `styles.css` | Design tokens and theme (monochrome + red accents). |
 
 Edit these here; the builder copies them into the emitted bundle. See the parent
-package [`README.md`](../README.md) and [`../../../../docs/site.md`](../../../../docs/site.md).
+package [`README.md`](../README.md) and [`../../../../docs/operations/site.md`](../../../../docs/operations/site.md).

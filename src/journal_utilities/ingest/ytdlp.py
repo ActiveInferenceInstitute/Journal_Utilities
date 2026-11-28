@@ -16,7 +16,7 @@ upcoming premiere from a published video. The adapter therefore:
    delta, capped by ``--max-new``);
 4. records ``"unknown"`` for every field the extractor cannot determine.
 
-Evidence rules (see ``docs/m3-ingest.md``):
+Evidence rules (see ``docs/pipeline/m3-ingest.md``):
 
 - ``scheduled`` requires premiere evidence (``live_status == "is_upcoming"``);
 - ``published`` requires availability evidence (``availability`` public or

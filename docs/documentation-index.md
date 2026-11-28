@@ -18,26 +18,26 @@ from it.
 
 ## Pipeline and module guides
 
-- [`youtube.md`](youtube.md) — enumeration (`youtube/channel.py`), guarded write path, quota, OAuth ownership
-- [`youtube-captions.md`](youtube-captions.md) — English WhisperX caption preparation and reviewed uploads
-- [`youtube_download.md`](youtube_download.md) — `yt-dlp` download engine (`download/downloader.py`)
-- [`transcription.md`](transcription.md) — local Whisper (`mlx-whisper`) and WhisperX
-- [`translation.md`](translation.md) — hosted OpenRouter subtitle translation
-- [`data.md`](data.md) — data layout, manifests, SurrealDB store
-- [`rag.md`](rag.md) — Cohere extraction into the SurrealDB graph
-- [`export.md`](export.md) — plaintext/PDF/Markdown/JSON/HTML export
-- [`render.md`](render.md) — Markdown/HTML rendering and course scaffolding
-- [`site.md`](site.md) — static GitHub Pages bundle, URL contract, sitemap
-- [`web_interface.md`](web_interface.md) — FastAPI SPA for the library
-- [`chat_engine.md`](chat_engine.md) — Ollama-powered RAG chat
-- [`m3-ingest.md`](m3-ingest.md) — weekly enumeration / scaffold / reconciliation
-- [`configuration.md`](configuration.md) — `config.ini` and `.env` reference
-- [`privacy.md`](privacy.md) — processing boundaries and API usage
+- [`youtube.md`](pipeline/youtube.md) — enumeration (`youtube/channel.py`), guarded write path, quota, OAuth ownership
+- [`youtube-captions.md`](pipeline/youtube-captions.md) — English WhisperX caption preparation and reviewed uploads
+- [`youtube_download.md`](pipeline/youtube_download.md) — `yt-dlp` download engine (`download/downloader.py`)
+- [`transcription.md`](pipeline/transcription.md) — local Whisper (`mlx-whisper`) and WhisperX
+- [`translation.md`](pipeline/translation.md) — hosted OpenRouter subtitle translation
+- [`data.md`](reference/data.md) — data layout, manifests, SurrealDB store
+- [`rag.md`](operations/rag.md) — Cohere extraction into the SurrealDB graph
+- [`export.md`](pipeline/export.md) — plaintext/PDF/Markdown/JSON/HTML export
+- [`render.md`](pipeline/render.md) — Markdown/HTML rendering and course scaffolding
+- [`site.md`](operations/site.md) — static GitHub Pages bundle, URL contract, sitemap
+- [`web_interface.md`](operations/web_interface.md) — FastAPI SPA for the library
+- [`chat_engine.md`](operations/chat_engine.md) — Ollama-powered RAG chat
+- [`m3-ingest.md`](pipeline/m3-ingest.md) — weekly enumeration / scaffold / reconciliation
+- [`configuration.md`](reference/configuration.md) — `config.ini` and `.env` reference
+- [`privacy.md`](reference/privacy.md) — processing boundaries and API usage
 
 ## Journal refactor
 
-- [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md) — canonical schema pointers and pipeline maintenance gate
-- [`REFACTOR_READINESS.md`](REFACTOR_READINESS.md) — coverage, local-LLM stack, verification process
+- [`JOURNAL_SCHEMA.md`](reference/JOURNAL_SCHEMA.md) — canonical schema pointers and pipeline maintenance gate
+- [`REFACTOR_READINESS.md`](operations/REFACTOR_READINESS.md) — coverage, local-LLM stack, verification process
 
 ## Gates, CI, and generated evidence
 
@@ -63,3 +63,27 @@ These files are written by a script; do not hand-edit them.
 - [`../SECURITY.md`](../SECURITY.md) — security and cookie-handling policy
 - [`../CITATION.cff`](../CITATION.cff) — citation metadata
 - [`../TODO.md`](../TODO.md) — backlog and pass records
+
+## Manuscript
+
+- [Source and render instructions](manuscript/README.md)
+
+## Documentation areas
+
+- [Media processing and export](pipeline/README.md)
+- [Schema and configuration](reference/README.md)
+- [Running and serving](operations/README.md)
+
+## Section sources and maintenance guides
+
+- [Abstract](manuscript/00_abstract.md)
+- [Introduction](manuscript/01_introduction.md)
+- [Methods](manuscript/02_methods.md)
+- [Results and limitations](manuscript/03_results_and_limitations.md)
+- [Discussion](manuscript/04_discussion.md)
+- [References](manuscript/99_references.md)
+- [Manuscript guidance](manuscript/AGENTS.md)
+- [LaTeX preamble](manuscript/preamble.md)
+- [Running and serving guidance](operations/AGENTS.md)
+- [Media processing and export guidance](pipeline/AGENTS.md)
+- [Schema and configuration guidance](reference/AGENTS.md)

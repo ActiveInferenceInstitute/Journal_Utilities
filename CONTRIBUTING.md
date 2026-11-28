@@ -26,7 +26,7 @@ below are run from the repo root.
 
 **If you modify a module, update its doc** (`docs/<module>.md`). If you add a
 script, document it in `scripts/README.md`. If you add a config option, document
-it in `docs/configuration.md` and `config.ini`. Stale docs are bugs here.
+it in `docs/reference/configuration.md` and `config.ini`. Stale docs are bugs here.
 
 ## Gate workflow (run before pushing)
 

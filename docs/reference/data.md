@@ -9,7 +9,7 @@ The Data module (`src/journal_utilities/data/`) manages persistence using Surrea
 - **Configuration**: Connection details via environment variables or `config.ini`.
 
 The `surrealdb>=3.0.0` distribution ships in the `rag` extra (`uv sync --extra rag`),
-the same pin the graph client in `docs/rag.md` uses. The 2.x `Surreal` class is gone
+the same pin the graph client in `docs/operations/rag.md` uses. The 2.x `Surreal` class is gone
 and the client is not a context-manager constructor: `AsyncSurreal(url)` is a factory
 returning an `AsyncSurrealConnection` (for `ws://` URLs an
 `AsyncWsSurrealConnection`), and `connect()` / `signin()` / `use()` / `query()` /

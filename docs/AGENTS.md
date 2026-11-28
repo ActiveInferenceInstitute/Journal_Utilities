@@ -7,7 +7,7 @@ Module and workflow guides for Journal-Utilities. Start at [`README.md`](README.
   and `../scripts/`.
 - Do **not** hardcode counts (video/item totals) — they drift; cite `data/output/channel_videos.json`
   or the journal `INDEX.json` as the live source.
-- ActiveInferenceJournal owns the schema. [`JOURNAL_SCHEMA.md`](JOURNAL_SCHEMA.md)
+- ActiveInferenceJournal owns the schema. [`JOURNAL_SCHEMA.md`](reference/JOURNAL_SCHEMA.md)
   keeps canonical pointers and pipeline instructions, not a mirrored definition.
   Follow the [Publishing integration](workflows/publishing.md) when updating pinned artifacts.
 - Keep [`documentation-index.md`](documentation-index.md) complete: every tracked
